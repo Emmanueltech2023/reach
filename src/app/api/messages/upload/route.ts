@@ -44,9 +44,13 @@ export async function POST(req: NextRequest) {
     if (uploadError) throw uploadError;
 
     // Get signed URL (valid for 7 days)
-    const { data: signedUrl } = await supabase.storage
+    const { data: signedData, error: signedError } = await supabase.storage
       .from("chat-files")
       .createSignedUrl(fileName, 60 * 60 * 24 * 7);
+
+    if (signedError || !signedData) {
+      throw new Error(signedError?.message || "Failed to generate signed asset URL");
+    }
 
     // Save message to database
     const { data: message, error: msgError } = await supabase
@@ -56,9 +60,9 @@ export async function POST(req: NextRequest) {
         sender_id: senderId,
         content: file.name,
         message_type: "file",
-        file_url: signedUrl?.signedUrl || "",
+        file_url: signedData.signedUrl,
         file_name: file.name,
-        is_read: false,
+        delivery_status: "sent", // Modified: Replaced dropped `is_read: false` column
       })
       .select(`*, profiles(id, full_name, username, avatar_url, is_verified)`)
       .single();

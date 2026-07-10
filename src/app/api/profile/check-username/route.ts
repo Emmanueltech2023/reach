@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
     const { data } = await supabase
       .from("profiles")
       .select("username")
-      .eq("username", username)
+      .ilike("username", username)
       .single();
 
     return NextResponse.json({ taken: !!data });

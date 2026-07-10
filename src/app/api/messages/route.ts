@@ -26,7 +26,8 @@ export async function GET(req: NextRequest) {
           id,
           full_name,
           username,
-          avatar_url
+          avatar_url,
+          is_verified
         )
       `)
       .eq("conversation_id", conversationId)
@@ -48,6 +49,7 @@ export async function POST(req: NextRequest) {
       senderId,
       content,
       messageType = "text",
+      dealId = null,
     } = await req.json();
 
     if (!conversationId || !senderId || !content) {
@@ -64,7 +66,8 @@ export async function POST(req: NextRequest) {
         sender_id: senderId,
         content,
         message_type: messageType,
-        is_read: false,
+        delivery_status: "sent", // Modified: Matches our new WhatsApp tracking schema
+        deal_id: dealId,         // Added: Supports interactive NDA & Deal structures
       })
       .select(`
         *,
@@ -72,7 +75,8 @@ export async function POST(req: NextRequest) {
           id,
           full_name,
           username,
-          avatar_url
+          avatar_url,
+          is_verified
         )
       `)
       .single();

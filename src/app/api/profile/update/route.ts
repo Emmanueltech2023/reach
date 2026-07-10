@@ -30,8 +30,12 @@ export async function POST(req: NextRequest) {
     }
 
     const { error } = await supabase
-      .from("profiles")
-      .upsert({ id: userId, ...updates });
+  .from("profiles")
+  .upsert({
+    id: userId,
+    ...updates,
+    ...(updates.username && { username: updates.username.toLowerCase() }),
+  });
 
     if (error) {
       console.log("Supabase error:", error);

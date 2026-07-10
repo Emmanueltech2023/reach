@@ -11,9 +11,8 @@ export async function POST(req: NextRequest) {
         Authorization: `Bearer ${process.env.DAILY_API_KEY}`,
       },
       body: JSON.stringify({
-        name: `ivest-${conversationId}-${Date.now()}`,
+        // REMOVED: name property entirely
         properties: {
-          max_participants: 10,
           enable_chat: false,
           enable_knocking: false,
           exp: Math.round(Date.now() / 1000) + 60 * 60 * 2, // 2 hours
@@ -27,6 +26,7 @@ export async function POST(req: NextRequest) {
       throw new Error(room.error || "Failed to create room");
     }
 
+    // Daily still returns the generated room.url and room.name perfectly here!
     return NextResponse.json({ url: room.url, name: room.name });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";

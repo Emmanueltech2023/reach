@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
         sender_id: senderId,
         content: ndaContent,
         message_type: "system",
-        is_read: false,
+        delivery_status: "sent", // Modified: Replaced dropped `is_read: false` column
       })
       .select(`*, profiles(id, full_name, username, avatar_url, is_verified)`)
       .single();

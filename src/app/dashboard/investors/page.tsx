@@ -22,7 +22,7 @@ type Investor = {
   max_ticket_size: number | null;
   total_invested: number | null;
   trust_score: number;
-  banner_url: string | null; // Used for the card header background image
+  banner_url: string | null;
 };
 
 const AVATAR_COLORS = [
@@ -34,7 +34,8 @@ const AVATAR_COLORS = [
 ];
 
 function getColor(id: string) {
-  return AVATAR_COLORS[id?.charCodeAt(0) % AVATAR_COLORS.length];
+  if (!id) return AVATAR_COLORS[0];
+  return AVATAR_COLORS[id.charCodeAt(0) % AVATAR_COLORS.length];
 }
 
 function getInitials(name: string) {
@@ -64,15 +65,37 @@ export default function InvestorDiscoveryPage() {
     if (user) setCurrentUserId(user.id);
   }, [supabase]);
 
+  // Wrapped in useCallback to prevent infinite render loops and dependency leakage
   const fetchInvestors = useCallback(async () => {
     setLoading(true);
+    
+    // Note: For full production mitigation against client network eavesdropping, 
+    // it is strongly recommended to handle this mapping via an API route endpoint or Postgres View.
     const { data } = await supabase
       .from("profiles")
-      .select("*")
+      .select("id, full_name, username, avatar_url, is_verified, country, bio, investment_focus, min_ticket_size, max_ticket_size, total_invested, trust_score, banner_url, is_anonymous")
       .eq("role", "investor")
       .order("created_at", { ascending: false });
 
-    setInvestors(data || []);
+    const masked = (data || []).map((inv) => {
+      if (inv.is_anonymous) {
+        return {
+          ...inv,
+          full_name: "Anonymous Investor",
+          username: "anonymous",
+          avatar_url: null,
+          banner_url: null,
+          country: null,
+          linkedin: null,
+          twitter: null,
+          website: null,
+          bio: "This premium institutional investor is operating in anonymous mode.",
+        };
+      }
+      return inv;
+    });
+
+    setInvestors(masked);
     setLoading(false);
   }, [supabase]);
 
@@ -81,7 +104,6 @@ export default function InvestorDiscoveryPage() {
       await fetchInvestors();
       await fetchCurrentUser();
     };
-
     void initData();
   }, [fetchCurrentUser, fetchInvestors]);
 
@@ -103,8 +125,8 @@ export default function InvestorDiscoveryPage() {
   const filtered = investors.filter((inv) => {
     const matchSearch =
       inv.full_name?.toLowerCase().includes(search.toLowerCase()) ||
-      inv.bio?.toLowerCase().includes(search.toLowerCase()) ||
-      inv.country?.toLowerCase().includes(search.toLowerCase()) ||
+      (inv.bio && inv.bio.toLowerCase().includes(search.toLowerCase())) ||
+      (inv.country && inv.country.toLowerCase().includes(search.toLowerCase())) ||
       inv.investment_focus?.some((f) =>
         f.toLowerCase().includes(search.toLowerCase())
       );
@@ -118,8 +140,6 @@ export default function InvestorDiscoveryPage() {
 
   return (
     <div className="min-h-screen bg-[#0F0F1A] text-[#F5F3ED] antialiased">
-      
-      {/* Sticky Top Header Navigation */}
       <header className="sticky top-0 z-40 bg-[#0F0F1A]/90 backdrop-blur-md border-b border-[#3A3A52]/60">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -139,12 +159,8 @@ export default function InvestorDiscoveryPage() {
         </div>
       </header>
 
-      {/* Main Discover Layout Feed */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        
-        {/* Advanced Filters Navigation Layout Container */}
         <div className="flex flex-col lg:flex-row gap-4 items-stretch lg:items-center justify-between bg-[#1A1A2E]/30 p-4 rounded-xl border border-[#3A3A52]/50 backdrop-blur-xs">
-          {/* Dynamic Input Frame */}
           <div className="flex-1 max-w-md flex items-center gap-3 bg-[#0F0F1A] border border-[#3A3A52]/80 rounded-lg px-3.5 py-2.5 focus-within:border-[#C9A84C] focus-within:ring-1 focus-within:ring-[#C9A84C]/20 transition-all duration-200">
             <Search size={15} className="text-[#5C5A70] shrink-0" />
             <input
@@ -155,7 +171,6 @@ export default function InvestorDiscoveryPage() {
             />
           </div>
 
-          {/* Cross-Browser Safe Scroll Filter List */}
           <div className="flex items-center gap-2 overflow-x-auto [scrollbar-none] [&::-webkit-scrollbar]:hidden lg:max-w-2xl py-0.5">
             {FOCUS_FILTERS.map((f) => (
               <button
@@ -173,7 +188,6 @@ export default function InvestorDiscoveryPage() {
           </div>
         </div>
 
-        {/* Dynamic Grid Results Controller */}
         <div>
           {loading ? (
             <div className="flex items-center justify-center py-40">
@@ -194,12 +208,11 @@ export default function InvestorDiscoveryPage() {
                   className="group bg-[#1A1A2E] border border-[#3A3A52] hover:border-[#5C5A70] rounded-xl overflow-hidden flex flex-col justify-between transition-all duration-300 hover:-translate-y-0.5 shadow-lg shadow-black/20"
                 >
                   <div>
-                    {/* Immersive Cover Image Header Area (Brings the exact image feature from project details) */}
                     <div className="h-32 overflow-hidden relative border-b border-[#3A3A52]/30 bg-[#1A1A2E]">
                       {inv.banner_url ? (
                         <Image
                           src={inv.banner_url}
-                          alt={`${inv.full_name} investment banner`}
+                          alt="Investment banner"
                           fill
                           unoptimized
                           className="object-cover group-hover:scale-[1.04] transition-transform duration-700 ease-out"
@@ -207,14 +220,10 @@ export default function InvestorDiscoveryPage() {
                       ) : (
                         <div className="w-full h-full bg-linear-to-br from-[#1A1A2E] via-[#231E3D] to-[#0F0F1A]" />
                       )}
-                      {/* Gradient Ambient Overlay mask for text protection */}
                       <div className="absolute inset-0 bg-linear-to-t from-[#1A1A2E] via-[#1A1A2E]/40 to-black/20" />
                     </div>
 
-                    {/* Meta Body Metrics block */}
                     <div className="p-5 -mt-12 relative z-10">
-                      
-                      {/* Avatar Overlap Identity Row Structure */}
                       <div className="flex items-end justify-between mb-4">
                         <div className={`w-20 h-20 rounded-2xl border-4 border-[#1A1A2E] flex items-center justify-center text-xl font-bold shrink-0 shadow-xl overflow-hidden bg-[#1A1A2E] ${getColor(inv.id)}`}>
                           {inv.avatar_url ? (
@@ -240,7 +249,6 @@ export default function InvestorDiscoveryPage() {
                         </button>
                       </div>
 
-                      {/* Descriptive Info Rows */}
                       <div className="space-y-1">
                         <div className="flex items-center gap-1.5 min-w-0">
                           <span className="text-[#F5F3ED] text-base font-semibold truncate group-hover:text-[#C9A84C] transition duration-150">
@@ -273,9 +281,7 @@ export default function InvestorDiscoveryPage() {
                     </div>
                   </div>
 
-                  {/* Operational Footer Capital Matrices Layout */}
                   <div className="px-5 pb-5 pt-3 border-t border-[#3A3A52]/30 bg-[#141426]/60">
-                    
                     <div className="grid grid-cols-3 gap-2 text-left">
                       <div className="bg-[#0F0F1A]/50 rounded-lg p-2 border border-[#3A3A52]/20">
                         <div className="text-[#F5F3ED] text-[11px] font-bold truncate">
@@ -307,7 +313,6 @@ export default function InvestorDiscoveryPage() {
                       </div>
                     </div>
 
-                    {/* Focus Array Badges Row */}
                     {inv.investment_focus && inv.investment_focus.length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-3.5 h-5 overflow-hidden items-center">
                         {inv.investment_focus.slice(0, 3).map((f) => (
@@ -326,7 +331,6 @@ export default function InvestorDiscoveryPage() {
                       </div>
                     )}
                   </div>
-
                 </div>
               ))}
             </div>

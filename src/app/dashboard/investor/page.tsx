@@ -80,10 +80,6 @@ export default function InvestorDashboard() {
   const [activeFilter, setActiveFilter] = useState("All");
   const [search, setSearch] = useState("");
   const [bookmarks, setBookmarks] = useState<string[]>([]);
-  const [profile, setProfile] = useState<{
-    full_name: string;
-    username: string;
-  } | null>(null);
 
   const fetchProjects = useCallback(async () => {
     setLoading(true);
@@ -92,17 +88,6 @@ export default function InvestorDashboard() {
     setProjects(projects || []);
     setLoading(false);
   }, []);
-
-  const fetchProfile = useCallback(async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const { data } = await supabase
-      .from("profiles")
-      .select("full_name, username")
-      .eq("id", user.id)
-      .single();
-    if (data) setProfile(data);
-  }, [supabase]);
 
   const fetchBookmarks = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -117,10 +102,9 @@ export default function InvestorDashboard() {
   useEffect(() => {
     void (async () => {
       await fetchProjects();
-      await fetchProfile();
       await fetchBookmarks();
     })();
-  }, [fetchProjects, fetchProfile, fetchBookmarks]);
+  }, [fetchProjects, fetchBookmarks]);
 
   const toggleBookmark = async (projectId: string) => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -154,7 +138,7 @@ export default function InvestorDashboard() {
   const standard = filtered.filter((p) => p.tier !== "premium");
 
   return (
-    <DashboardShell role="investor" fullName={profile?.full_name} username={profile?.username}>
+    <DashboardShell role="investor">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 space-y-6 text-[#F5F3ED]">
 
         {/* Global Toolbar Panel */}

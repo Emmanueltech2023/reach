@@ -40,10 +40,14 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Create new conversation
+    // Create new conversation with our optimized cache strings set to null defaults
     const { data: conversation, error: convError } = await supabase
       .from("conversations")
-      .insert({ project_id: projectId || null })
+      .insert({ 
+        project_id: projectId || null,
+        last_message_content: null, // Ensured fields conform cleanly during initialization
+        last_message_at: null
+      })
       .select()
       .single();
 

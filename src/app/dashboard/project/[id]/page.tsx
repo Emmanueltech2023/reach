@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import { useRouter, useParams } from "next/navigation";
 import {
-  ArrowLeft, MessageCircle, Bookmark, Share2,
+  ArrowLeft, MessageCircle, Bookmark, Share2, Handshake,
   CheckCircle, Globe, X, MapPin, ExternalLink, Loader2, Calendar, Eye
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -378,13 +378,44 @@ export default function ProjectDetailPage() {
               {/* Desktop Only Action Controls block */}
               <div className="hidden md:block pt-2">
                 {!isCurrentUserProject ? (
-                  <div className="flex gap-2">
+                  <div className="flex gap-3">
                     <button
                       onClick={startChat}
                       className="flex-1 flex items-center justify-center gap-2 bg-[#C9A84C] text-[#1A1A2E] font-bold text-xs py-3 rounded-lg hover:bg-[#b5953e] transition shadow-md"
                     >
                       <MessageCircle size={14} />
                       Message Founder
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (!currentUserId || !project) return;
+                        const res = await fetch("/api/deals", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            investorId: currentUserId,
+                            projectId: project.id,
+                          }),
+                        });
+                        const data = await res.json();
+                        if (res.ok) {
+                          router.push("/dashboard/deals");
+                        } else {
+                          alert(data.error || "Failed to initiate deal.");
+                        }
+                      }}
+                      className="flex items-center justify-center gap-2 border border-[#C9A84C] text-[#C9A84C] font-medium text-sm px-4 py-3 rounded-xl hover:bg-[#C9A84C10] transition"
+                    >
+                      <Handshake size={14} />
+                      Start deal
+                    </button>
+                    <button
+                      onClick={toggleBookmark}
+                      className="flex items-center justify-center w-12 border border-[#3A3A52] rounded-xl hover:border-[#5C5A70] transition"
+                    >
+                      <Bookmark size={18}
+                        className={isBookmarked ? "text-[#C9A84C] fill-[#C9A84C]" : "text-[#A8A6B8]"}
+                      />
                     </button>
                   </div>
                 ) : (
@@ -438,6 +469,26 @@ export default function ProjectDetailPage() {
             >
               <MessageCircle size={16} />
               Message Founder
+            </button>
+            <button
+              onClick={async () => {
+                if (!currentUserId || !project) return;
+                const res = await fetch("/api/deals", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ investorId: currentUserId, projectId: project.id }),
+                });
+                const data = await res.json();
+                if (res.ok) {
+                  router.push("/dashboard/deals");
+                } else {
+                  alert(data.error || "Failed to initiate deal.");
+                }
+              }}
+              className="flex items-center justify-center gap-2 border border-[#C9A84C] text-[#C9A84C] font-medium text-sm px-4 py-3 rounded-xl hover:bg-[#C9A84C10] transition"
+            >
+              <Handshake size={16} />
+              Start deal
             </button>
             <button
               onClick={toggleBookmark}

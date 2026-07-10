@@ -86,7 +86,7 @@ export default function BuilderDashboard() {
   const totalGoal = projects.reduce((sum, p) => sum + (p.funding_goal || 0), 0);
 
   return (
-    <DashboardShell role="builder" fullName={profile?.full_name} username={profile?.username}>
+    <DashboardShell role="builder" fullName={profile?.full_name} username={profile?.username} >
       {/* Mobile bottom nav cutoff fix */}
       <div className="flex flex-col gap-4 pb-28 md:pb-4">
 
