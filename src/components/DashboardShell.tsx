@@ -6,7 +6,7 @@ import { useRouter, usePathname } from "next/navigation";
 import {
   Compass, MessageCircle, Calendar, Bookmark,
   User, LayoutGrid, Upload, TrendingUp, Users,
-  Bell, LogOut, Menu, X, Handshake,
+  Bell, LogOut, Menu, X, Handshake, Sparkles,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
@@ -19,9 +19,10 @@ type NavItem = {
 
 const INVESTOR_NAV: NavItem[] = [
   { id: "explore", icon: Compass, label: "Explore", href: "/dashboard/investor" },
+  { id: "matches", icon: Sparkles, label: "AI Matches", href: "/dashboard/matches" },
   { id: "chats", icon: MessageCircle, label: "Messages", href: "/dashboard/chats" },
-  { id: "meetings", icon: Calendar, label: "Meetings", href: "/dashboard/meetings" },
   { id: "deals", icon: Handshake, label: "Deals", href: "/dashboard/deals" },
+  { id: "meetings", icon: Calendar, label: "Meetings", href: "/dashboard/meetings" },
   { id: "bookmarks", icon: Bookmark, label: "Saved", href: "/dashboard/bookmarks" },
   { id: "community", icon: Users, label: "Community", href: "/dashboard/community" },
   { id: "profile", icon: User, label: "Profile", href: "/dashboard/profile" },

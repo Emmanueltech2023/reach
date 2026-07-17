@@ -10,6 +10,7 @@ import {
   DollarSign,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import WalletConnect from "@/components/WalletConnect";
 
 const INVESTMENT_FOCUS_OPTIONS = [
   "FinTech","HealthTech","EdTech","AgriTech","DeFi",
@@ -38,6 +39,8 @@ type Profile = {
   max_ticket_size: number | null;
   total_invested: number | null;
   subscription_tier: string;
+  wallet_address: string | null;
+  wallet_verified: boolean;
 };
 
 export default function ProfilePage() {
@@ -337,6 +340,19 @@ export default function ProfilePage() {
       )}
     </div>
   </div>
+
+  {/* Web3 Wallet */}
+<div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-xl p-4">
+  <h2 className="text-[#F5F3ED] text-sm font-medium mb-3">Web3 Wallet</h2>
+  {profile && (
+    <WalletConnect
+      userId={profile.id}
+      onConnected={(address) => {
+        setProfile((prev) => prev ? { ...prev, wallet_address: address } : prev);
+      }}
+    />
+  )}
+</div>
   
 </div>
 

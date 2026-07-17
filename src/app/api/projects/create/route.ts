@@ -55,6 +55,30 @@ export async function POST(req: NextRequest) {
       invited_by: founderId,
     });
 
+    // --- NEW UPDATES START HERE ---
+    
+    // Trigger AI embedding (non-blocking)
+    if (data?.id) {
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+      
+      // Fire-and-forget the embedding request
+      fetch(`${appUrl}/api/ai/embed`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "project", id: data.id }),
+      }).catch(console.error);
+
+      // Add trust event for project creation
+      await supabase.from("trust_events").insert({
+        user_id: founderId,
+        event_type: "project_published",
+        points: 10,
+        description: `Published project: ${name}`,
+      });
+    }
+
+    // --- NEW UPDATES END HERE ---
+
     return NextResponse.json({ project: data });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";

@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
+import { sendEmail, emailTemplates } from "@/lib/email";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -147,25 +148,80 @@ export async function PATCH(req: NextRequest) {
 
     if (error) throw error;
 
-    // Commission notification on close
+    // Logic for closed deal
     if (stage === "closed" && data.amount && data.commission_rate) {
       const commission = (data.amount * data.commission_rate) / 100;
+      const dueDate = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
 
-      await supabase.from("notifications").insert([
-        {
-          user_id: data.investor_id,
-          title: "🎉 Deal closed successfully",
-          body: `Congratulations! Deal closed for ${data.projects?.name}. Platform commission of $${commission.toFixed(2)} (${data.commission_rate}%) is now due.`,
-          type: "deal",
-          action_url: "/dashboard/deals",
-        },
-        ...(data.projects?.founder_id ? [{
-          user_id: data.projects.founder_id,
-          title: "🎉 Deal closed",
-          body: `Your deal has been marked as closed for $${data.amount.toLocaleString()}. The iVest team will be in touch regarding next steps.`,
-          type: "deal",
-          action_url: "/dashboard/deals",
-        }] : []),
+      // Perform background tasks in parallel (non-blocking)
+      await Promise.all([
+        // 1. Create Invoice
+        supabase.from("commission_invoices").insert({
+          deal_id: dealId,
+          investor_id: data.investor_id,
+          project_id: data.project_id,
+          deal_amount: data.amount,
+          commission_rate: data.commission_rate,
+          commission_amount: commission,
+          status: "pending",
+          due_date: dueDate.toISOString(),
+        }),
+
+        // 2. Insert Notifications
+        supabase.from("notifications").insert([
+          {
+            user_id: data.investor_id,
+            title: "🎉 Deal closed — Commission invoice generated",
+            body: `Deal closed for $${data.amount.toLocaleString()}. Platform commission of $${commission.toFixed(2)} is due by ${dueDate.toLocaleDateString()}.`,
+            type: "deal",
+            action_url: "/dashboard/deals",
+          },
+          ...(data.projects?.founder_id ? [{
+            user_id: data.projects.founder_id,
+            title: "🎉 Deal closed",
+            body: `Your deal has been marked as closed for $${data.amount.toLocaleString()}. Congratulations!`,
+            type: "deal",
+            action_url: "/dashboard/deals",
+          }] : []),
+        ]),
+
+        // 3. Award Trust Points
+        supabase.from("trust_events").insert([
+          {
+            user_id: data.investor_id,
+            event_type: "deal_closed",
+            points: 25,
+            description: `Closed deal for $${data.amount.toLocaleString()}`,
+          },
+          ...(data.projects?.founder_id ? [{
+            user_id: data.projects.founder_id,
+            event_type: "deal_closed",
+            points: 25,
+            description: `Deal closed for ${data.projects.name}`,
+          }] : []),
+        ]),
+
+        // 4. Send Email (Wrapped in async IIFE to prevent blocking)
+        (async () => {
+          const [{ data: authUser }, { data: invProfile }] = await Promise.all([
+            supabase.auth.admin.getUserById(data.investor_id),
+            supabase.from("profiles").select("full_name").eq("id", data.investor_id).single()
+          ]);
+
+          if (authUser?.user?.email && invProfile?.full_name) {
+            await sendEmail({
+              to: authUser.user.email,
+              subject: `🎉 Deal closed — Commission invoice for ${data.projects?.name}`,
+              html: emailTemplates.commissionInvoice(
+                invProfile.full_name,
+                data.projects?.name || "your deal",
+                data.amount,
+                commission,
+                dueDate.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
+              ),
+            }).catch(console.error);
+          }
+        })()
       ]);
     }
 

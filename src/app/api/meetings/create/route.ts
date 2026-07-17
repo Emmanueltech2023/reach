@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
+import { sendEmail, emailTemplates } from "@/lib/email";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -80,6 +81,54 @@ export async function POST(req: NextRequest) {
         is_read: false,
       });
     }
+
+    // Get organizer info for email
+    const { data: organizer } = await supabase
+      .from("profiles")
+      .select("full_name")
+      .eq("id", organizerId)
+      .single();
+
+    const formattedDate = new Date(scheduledAt).toLocaleString("en-US", {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    // Send email to participant
+    if (participantId) {
+      await supabase.from("notifications").insert({
+        user_id: participantId,
+        title: `Meeting scheduled: ${title}`,
+        body: `${organizer?.full_name} scheduled a meeting with you for ${formattedDate}`,
+        type: "meeting",
+        action_url: "/dashboard/meetings",
+      });
+
+      const { data: participantAuth } = await supabase.auth.admin.getUserById(participantId);
+      const { data: participantProfile } = await supabase
+        .from("profiles")
+        .select("full_name")
+        .eq("id", participantId)
+        .single();
+
+      if (participantAuth?.user?.email && participantProfile?.full_name) {
+        await sendEmail({
+          to: participantAuth.user.email,
+          subject: `📅 Meeting: ${title} — iVest`,
+          html: emailTemplates.meetingInvite(
+            participantProfile.full_name,
+            title,
+            formattedDate,
+            organizer?.full_name || "Someone"
+          ),
+        });
+      }
+    }
+
 
     return NextResponse.json({ meeting });
   } catch (err: unknown) {

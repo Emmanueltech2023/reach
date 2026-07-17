@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
 import DashboardShell from "@/components/DashboardShell";
 import {
   Users, Plus, Heart, MessageCircle,
@@ -305,11 +304,11 @@ export default function CommunityPage() {
           <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-xl p-5">
             <div className="flex items-start gap-3 mb-4">
               {/* Profile Image Asset Check */}
-              <div className="relative w-10 h-10 rounded-full bg-[#C9A84C20] flex items-center justify-center text-sm font-medium text-[#C9A84C] shrink-0 overflow-hidden border border-[#3A3A52]">
-                {selectedPost.is_anonymous ? "?" : selectedPost.profiles?.avatar_url ? (
-                  <Image src={selectedPost.profiles.avatar_url} alt={selectedPost.profiles?.full_name || "Post author avatar"} fill className="object-cover" unoptimized />
-                ) : selectedPost.profiles?.full_name?.[0] || "?"}
-              </div>
+             <div className="w-10 h-10 rounded-full bg-[#C9A84C20] flex items-center justify-center text-sm font-medium text-[#C9A84C] shrink-0 overflow-hidden border border-[#3A3A52]">
+  {selectedPost.is_anonymous ? "?" : selectedPost.profiles?.avatar_url ? (
+    <img src={selectedPost.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
+  ) : selectedPost.profiles?.full_name?.[0] || "?"}
+</div>
               <div className="flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-[#F5F3ED] text-sm font-medium">
@@ -334,9 +333,9 @@ export default function CommunityPage() {
 
             {/* Attached Photo Frame Rendering */}
             {selectedPost.image_url && (
-              <div className="relative mb-4 rounded-xl border border-[#3A3A52] overflow-hidden bg-black/40 max-h-112.5 flex items-center justify-center">
-                <Image src={selectedPost.image_url} alt="Attached asset content" fill className="object-contain" unoptimized />
-              </div>
+              <div className="mb-4 rounded-xl border border-[#3A3A52] overflow-hidden bg-black/40">
+  <img src={selectedPost.image_url} alt="" className="w-full max-h-96 object-contain" />
+</div>
             )}
 
             <div className="flex items-center gap-6 border-t border-[#3A3A52]/50 pt-3 mt-2">
@@ -368,11 +367,11 @@ export default function CommunityPage() {
               comments.map((c) => (
                 <div key={c.id} className="bg-[#1A1A2E] border border-[#3A3A52] rounded-xl p-4">
                   <div className="flex items-center gap-2 mb-2">
-                    <div className="relative w-7 h-7 rounded-full bg-[#C9A84C20] flex items-center justify-center text-xs font-medium text-[#C9A84C] shrink-0 overflow-hidden">
-                      {c.is_anonymous ? "?" : c.profiles?.avatar_url ? (
-                        <Image src={c.profiles.avatar_url} alt={c.profiles?.full_name || "Comment author avatar"} fill className="object-cover" unoptimized />
-                      ) : c.profiles?.full_name?.[0] || "?"}
-                    </div>
+                    <div className="w-7 h-7 rounded-full bg-[#C9A84C20] flex items-center justify-center text-xs font-medium text-[#C9A84C] shrink-0 overflow-hidden">
+  {c.is_anonymous ? "?" : c.profiles?.avatar_url ? (
+    <img src={c.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
+  ) : c.profiles?.full_name?.[0] || "?"}
+</div>
                     <div className="flex items-center gap-2">
                       <span className="text-[#F5F3ED] text-xs font-medium">
                         {c.is_anonymous ? "Anonymous" : c.profiles?.full_name}
@@ -485,10 +484,10 @@ export default function CommunityPage() {
               >
                 <div className="flex items-start gap-3 mb-2">
                   <div className="w-9 h-9 rounded-full bg-[#C9A84C20] flex items-center justify-center text-xs font-medium text-[#C9A84C] shrink-0 overflow-hidden border border-[#3A3A52]/50">
-                    {post.is_anonymous ? "?" : post.profiles?.avatar_url ? (
-                      <Image src={post.profiles.avatar_url} alt={post.profiles?.full_name || "Post author avatar"} fill className="object-cover" unoptimized />
-                    ) : post.profiles?.full_name?.[0] || "?"}
-                  </div>
+  {post.is_anonymous ? "?" : post.profiles?.avatar_url ? (
+    <img src={post.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
+  ) : post.profiles?.full_name?.[0] || "?"}
+</div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-[#F5F3ED] text-sm font-medium truncate">
@@ -511,9 +510,9 @@ export default function CommunityPage() {
 
                 {/* Feed view Thumbnail Attachments */}
                 {post.image_url && (
-                  <div className="relative ml-12 mb-3 rounded-xl border border-[#3A3A52] overflow-hidden bg-black/30 max-h-75 flex items-center justify-center">
-                    <Image src={post.image_url} alt="Post attachment asset" fill className="object-cover" unoptimized />
-                  </div>
+                  <div className="ml-12 mb-3 rounded-xl border border-[#3A3A52] overflow-hidden bg-black/30">
+  <img src={post.image_url} alt="" className="w-full max-h-64 object-cover" />
+</div>
                 )}
 
                 <div className="flex items-center gap-6 pl-12">
@@ -568,8 +567,8 @@ export default function CommunityPage() {
 
               {/* Upload Render Preview Block */}
               {postForm.image_url && (
-                <div className="relative rounded-xl border border-[#3A3A52] overflow-hidden bg-black/50 aspect-video flex items-center justify-center">
-                  <Image src={postForm.image_url} alt="Attached upload snippet view" fill className="object-contain" unoptimized />
+                <div className="rounded-xl border border-[#3A3A52] overflow-hidden bg-black/50">
+  <img src={postForm.image_url} alt="" className="w-full max-h-64 object-contain" />
                   <button 
                     onClick={() => setPostForm(p => ({ ...p, image_url: null }))}
                     className="absolute top-2 right-2 p-1.5 bg-black/70 hover:bg-black rounded-full text-white transition"

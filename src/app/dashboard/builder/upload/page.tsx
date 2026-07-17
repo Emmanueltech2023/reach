@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useRef } from "react";
 import Image from "next/image";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Loader2, Star, Camera, Upload } from "lucide-react";
+import { ArrowLeft, Loader2, Star, Camera, Upload, FileText } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 const SECTORS = [
@@ -30,6 +30,7 @@ export default function UploadProjectPage() {
   const [bannerPreview, setBannerPreview] = useState<string | null>(null);
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [bannerFile, setBannerFile] = useState<File | null>(null);
+  const [pitchDeckFile, setPitchDeckFile] = useState<File | null>(null);
   const logoRef = useRef<HTMLInputElement>(null);
   const bannerRef = useRef<HTMLInputElement>(null);
 
@@ -88,16 +89,13 @@ export default function UploadProjectPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not logged in");
 
+      // Upload images first
       let logoUrl = "";
       let bannerUrl = "";
+      if (logoFile) logoUrl = await uploadImage(logoFile, `logos/${user.id}`);
+      if (bannerFile) bannerUrl = await uploadImage(bannerFile, `banners/${user.id}`);
 
-      if (logoFile) {
-        logoUrl = await uploadImage(logoFile, `logos/${user.id}`);
-      }
-      if (bannerFile) {
-        bannerUrl = await uploadImage(bannerFile, `banners/${user.id}`);
-      }
-
+      // Create the project
       const res = await fetch("/api/projects/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -121,8 +119,22 @@ export default function UploadProjectPage() {
         }),
       });
 
+      // Parse response FIRST before using data
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to create project");
+
+      // NOW upload pitch deck using the project ID from response
+      if (data.project && pitchDeckFile) {
+        const deckFormData = new FormData();
+        deckFormData.append("file", pitchDeckFile);
+        deckFormData.append("projectId", data.project.id);
+        deckFormData.append("type", "pitch_deck");
+        await fetch("/api/projects/upload-deck", {
+          method: "POST",
+          body: deckFormData,
+        });
+      }
+
       router.push("/dashboard/builder");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Something went wrong");
@@ -132,72 +144,73 @@ export default function UploadProjectPage() {
   };
 
   return (
-  <main className="min-h-screen bg-[#0F0F1A] pb-12">
-    <div className="max-w-lg mx-auto">
+    <main className="min-h-screen bg-[#0F0F1A] pb-12">
+      <div className="max-w-lg mx-auto">
 
-      {/* Fixed top header — ABOVE the banner */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-[#3A3A52] sticky top-0 bg-[#0F0F1A] z-10">
-        <button onClick={() => router.push("/dashboard/builder")}>
-          <ArrowLeft size={20} className="text-[#A8A6B8]" />
-        </button>
-        <div>
-          <h1 className="text-[#F5F3ED] text-base font-medium">Upload project</h1>
-          <p className="text-[#5C5A70] text-xs">Connect with global investors</p>
-        </div>
-      </div>
-
-      {/* Banner upload — BELOW header */}
-      <div
-        className="relative w-full h-40 bg-[#1A1A2E] cursor-pointer overflow-hidden"
-        onClick={() => bannerRef.current?.click()}
-      >
-        {bannerPreview ? (
-          <Image src={bannerPreview} alt="Banner" width={1200} height={160} unoptimized className="w-full h-full object-cover" />
-        ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center gap-2">
-            <Upload size={22} className="text-[#3A3A52]" />
-            <span className="text-[#5C5A70] text-xs">Click to upload banner image</span>
+        {/* Fixed top header */}
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-[#3A3A52] sticky top-0 bg-[#0F0F1A] z-10">
+          <button onClick={() => router.push("/dashboard/builder")}>
+            <ArrowLeft size={20} className="text-[#A8A6B8]" />
+          </button>
+          <div>
+            <h1 className="text-[#F5F3ED] text-base font-medium">Upload project</h1>
+            <p className="text-[#5C5A70] text-xs">Connect with global investors</p>
           </div>
-        )}
-        <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 hover:opacity-100 transition">
-          <Camera size={20} className="text-white" />
         </div>
-        <input ref={bannerRef} type="file" accept="image/*" className="hidden"
-          onChange={(e) => handleImageSelect(e, "banner")} />
-      </div>
 
-      {/* Logo upload */}
-      <div className="px-4 -mt-8 mb-6 flex items-end gap-4">
+        {/* Banner upload */}
         <div
-          className="w-16 h-16 rounded-xl bg-[#1A1A2E] border-2 border-[#0F0F1A] flex items-center justify-center cursor-pointer overflow-hidden shrink-0 relative"
-          onClick={() => logoRef.current?.click()}
+          className="relative w-full h-40 bg-[#1A1A2E] cursor-pointer overflow-hidden"
+          onClick={() => bannerRef.current?.click()}
         >
-          {logoPreview ? (
-            <Image src={logoPreview} alt="Logo" width={64} height={64} unoptimized className="w-full h-full object-cover" />
+          {bannerPreview ? (
+            <Image
+              src={bannerPreview}
+              alt="Banner"
+              fill
+              unoptimized
+              className="w-full h-full object-cover"
+            />
           ) : (
-            <Camera size={20} className="text-[#3A3A52]" />
-          )}
-          <input ref={logoRef} type="file" accept="image/*" className="hidden"
-            onChange={(e) => handleImageSelect(e, "logo")} />
-        </div>
-        <div className="pt-2">
-          <p className="text-[#F5F3ED] text-sm font-medium">Project media</p>
-          <p className="text-[#5C5A70] text-xs">Banner (above) · Logo (left)</p>
-        </div>
-      </div>
-
-      <div className="px-4">
-          {/* Header */}
-          <div className="flex items-center gap-3 mb-6">
-            <button onClick={() => router.push("/dashboard/builder")}>
-              <ArrowLeft size={20} className="text-[#A8A6B8]" />
-            </button>
-            <div>
-              <h1 className="text-[#F5F3ED] text-base font-medium">Upload project</h1>
-              <p className="text-[#5C5A70] text-xs">Connect with global investors</p>
+            <div className="w-full h-full flex flex-col items-center justify-center gap-2">
+              <Upload size={22} className="text-[#3A3A52]" />
+              <span className="text-[#5C5A70] text-xs">Click to upload banner image</span>
             </div>
+          )}
+          <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 hover:opacity-100 transition">
+            <Camera size={20} className="text-white" />
           </div>
+          <input ref={bannerRef} type="file" accept="image/*" className="hidden"
+            onChange={(e) => handleImageSelect(e, "banner")} />
+        </div>
 
+        {/* Logo upload */}
+        <div className="px-4 -mt-8 mb-6 flex items-end gap-4">
+          <div
+            className="w-16 h-16 rounded-xl bg-[#1A1A2E] border-2 border-[#0F0F1A] flex items-center justify-center cursor-pointer overflow-hidden shrink-0"
+            onClick={() => logoRef.current?.click()}
+          >
+            {logoPreview ? (
+              <Image
+                src={logoPreview}
+                alt="Logo"
+                fill
+                unoptimized
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <Camera size={20} className="text-[#3A3A52]" />
+            )}
+            <input ref={logoRef} type="file" accept="image/*" className="hidden"
+              onChange={(e) => handleImageSelect(e, "logo")} />
+          </div>
+          <div className="pt-2">
+            <p className="text-[#F5F3ED] text-sm font-medium">Project media</p>
+            <p className="text-[#5C5A70] text-xs">Banner (above) · Logo (left)</p>
+          </div>
+        </div>
+
+        <div className="px-4">
           {error && (
             <div className="bg-red-900/30 border border-red-700 text-red-300 text-xs rounded-lg px-4 py-3 mb-4">
               {error}
@@ -226,6 +239,36 @@ export default function UploadProjectPage() {
                 rows={4} placeholder="Problem, solution, traction, team…"
                 className="w-full bg-[#1A1A2E] border border-[#3A3A52] text-[#F5F3ED] text-sm rounded-lg px-4 py-3 outline-none focus:border-[#C9A84C] transition placeholder-[#5C5A70] resize-none" />
             </div>
+
+            {/* Pitch deck upload — shown after name is entered */}
+            {form.name && (
+              <div>
+                <label className="text-[#A8A6B8] text-xs mb-1.5 block">
+                  Pitch Deck (PDF)
+                </label>
+                <label className={`flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl py-6 cursor-pointer transition ${
+                  pitchDeckFile
+                    ? "border-[#C9A84C] bg-[#C9A84C08]"
+                    : "border-[#3A3A52] hover:border-[#C9A84C]"
+                }`}>
+                  <FileText size={22} className={pitchDeckFile ? "text-[#C9A84C]" : "text-[#3A3A52]"} />
+                  <div className="text-center">
+                    <div className={`text-sm font-medium ${pitchDeckFile ? "text-[#C9A84C]" : "text-[#A8A6B8]"}`}>
+                      {pitchDeckFile ? pitchDeckFile.name : "Upload pitch deck"}
+                    </div>
+                    <div className="text-xs text-[#5C5A70] mt-0.5">
+                      {pitchDeckFile ? "Click to replace" : "PDF, DOC up to 20MB"}
+                    </div>
+                  </div>
+                  <input
+                    type="file"
+                    accept=".pdf,.doc,.docx"
+                    className="hidden"
+                    onChange={(e) => setPitchDeckFile(e.target.files?.[0] || null)}
+                  />
+                </label>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -286,9 +329,12 @@ export default function UploadProjectPage() {
             <div>
               <label className="text-[#A8A6B8] text-xs mb-1.5 block">Amount Already Raised (USD)</label>
               <input name="amountAlreadyRaised" type="number" min="0"
-                value={form.amountAlreadyRaised} onChange={handleChange} placeholder="e.g. 50000 (leave blank if none)"
+                value={form.amountAlreadyRaised} onChange={handleChange}
+                placeholder="e.g. 50000 (leave blank if none)"
                 className="w-full bg-[#1A1A2E] border border-[#3A3A52] text-[#F5F3ED] text-sm rounded-lg px-4 py-3 outline-none focus:border-[#C9A84C] transition placeholder-[#5C5A70]" />
-              <p className="text-[#5C5A70] text-xs mt-1">This sets your starting progress bar. You can update it anytime.</p>
+              <p className="text-[#5C5A70] text-xs mt-1">
+                This sets your starting progress bar. You can update it anytime.
+              </p>
             </div>
 
             <div>
@@ -324,11 +370,18 @@ export default function UploadProjectPage() {
                 ].map((t) => (
                   <button key={t.id} type="button"
                     onClick={() => {
-                      if (t.id === "free") { setForm({ ...form, tier: "free" }); setShowUpgradePrompt(false); }
-                      else { setSelectedTierInfo(t.id); setShowUpgradePrompt(true); }
+                      if (t.id === "free") {
+                        setForm({ ...form, tier: "free" });
+                        setShowUpgradePrompt(false);
+                      } else {
+                        setSelectedTierInfo(t.id);
+                        setShowUpgradePrompt(true);
+                      }
                     }}
                     className={`py-3 px-2 rounded-lg border text-left transition ${
-                      form.tier === t.id ? "border-[#C9A84C] bg-[#C9A84C10]" : "border-[#3A3A52] hover:border-[#5C5A70]"
+                      form.tier === t.id
+                        ? "border-[#C9A84C] bg-[#C9A84C10]"
+                        : "border-[#3A3A52] hover:border-[#5C5A70]"
                     }`}>
                     <div className={`text-xs font-medium mb-0.5 ${form.tier === t.id ? "text-[#C9A84C]" : "text-[#F5F3ED]"}`}>
                       {t.label}
@@ -344,7 +397,9 @@ export default function UploadProjectPage() {
 
             <button type="submit" disabled={loading}
               className={`w-full font-medium text-sm py-3 rounded-lg transition mt-2 ${
-                loading ? "bg-[#2A2A3E] text-[#5C5A70] cursor-not-allowed" : "bg-[#C9A84C] text-[#1A1A2E] hover:opacity-90"
+                loading
+                  ? "bg-[#2A2A3E] text-[#5C5A70] cursor-not-allowed"
+                  : "bg-[#C9A84C] text-[#1A1A2E] hover:opacity-90"
               }`}>
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
@@ -374,7 +429,7 @@ export default function UploadProjectPage() {
               </p>
             </div>
             <button
-              onClick={() => { setShowUpgradePrompt(false); alert("Payment integration coming soon. Publishing on Free tier."); }}
+              onClick={() => router.push("/dashboard/upgrade")}
               className="w-full bg-[#C9A84C] text-[#1A1A2E] font-medium text-sm py-3 rounded-lg hover:opacity-90 transition mb-2"
             >
               Upgrade — {selectedTierInfo === "pro" ? "$29/mo" : "$79/mo"}

@@ -4,7 +4,7 @@ import { NextResponse, type NextRequest } from "next/server";
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Never intercept API routes, static files or auth pages
+  // Never intercept API routes, static files, auth pages, or root
   if (
     pathname.startsWith("/api") ||
     pathname.startsWith("/auth") ||
@@ -38,36 +38,54 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data: { user } } = await supabase.auth.getUser();
 
-  // Not logged in trying to access dashboard
-  if (!user && pathname.startsWith("/dashboard")) {
+  // Not logged in trying to access protected routes
+  if (!user && (pathname.startsWith("/dashboard") || pathname.startsWith("/admin"))) {
     const url = request.nextUrl.clone();
     url.pathname = "/auth/login";
     return NextResponse.redirect(url);
   }
 
- // Logged in trying to access login or signup
-if (
-  user &&
-  (pathname === "/auth/login" || pathname === "/auth/signup")
-) {
-  // Fetch role to redirect correctly
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
+  // Logged in — enforce role-based dashboard routing
+  if (user && (pathname.startsWith("/dashboard/investor") || pathname.startsWith("/dashboard/builder"))) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
 
-  const url = request.nextUrl.clone();
-  url.pathname =
-    profile?.role === "builder"
+    if (profile?.role) {
+      const url = request.nextUrl.clone();
+
+      // Builder trying to access investor dashboard → redirect to builder
+      if (profile.role === "builder" && pathname.startsWith("/dashboard/investor")) {
+        url.pathname = "/dashboard/builder";
+        return NextResponse.redirect(url);
+      }
+
+      // Investor trying to access builder dashboard → redirect to investor
+      if (profile.role === "investor" && pathname.startsWith("/dashboard/builder")) {
+        url.pathname = "/dashboard/investor";
+        return NextResponse.redirect(url);
+      }
+    }
+  }
+
+  // Logged in user visiting login or signup → redirect to their dashboard
+  if (user && (pathname === "/auth/login" || pathname === "/auth/signup")) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+
+    const url = request.nextUrl.clone();
+    url.pathname = profile?.role === "builder"
       ? "/dashboard/builder"
       : "/dashboard/investor";
-  return NextResponse.redirect(url);
-}
+    return NextResponse.redirect(url);
+  }
 
   return supabaseResponse;
 }
