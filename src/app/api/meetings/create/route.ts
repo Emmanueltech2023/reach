@@ -123,7 +123,7 @@ if (!tierCanDo(tier, "canScheduleMeetings")) {
       if (participantAuth?.user?.email) {
         await sendEmail({
           to: participantAuth.user.email,
-          subject: `📅 Meeting: ${title} — iVest`,
+          subject: `📅 Meeting: ${title} — REACH`,
           html: emailTemplates.meetingInvite(
             participantProfile?.full_name || "User",
             title,

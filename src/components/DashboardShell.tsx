@@ -250,8 +250,8 @@ export default function DashboardShell({
       {/* Desktop Sidebar */}
       <aside suppressHydrationWarning className="hidden md:flex flex-col w-56 border-r border-[#3A3A52] shrink-0 fixed top-0 left-0 h-full z-30 bg-[#0F0F1A]">
         <div className="px-5 py-5 border-b border-[#3A3A52]">
-          <div className="text-xl font-medium text-[#F5F3ED]">
-            i<span className="text-[#C9A84C]">Vest</span>
+          <div className="text-xl font-bold tracking-wider text-[#F5F3ED]">
+            R<span className="text-[#C9A84C]">EACH</span>
           </div>
           <div suppressHydrationWarning className="text-xs text-[#5C5A70] mt-0.5 capitalize">
             {currentRole} dashboard
@@ -331,8 +331,8 @@ export default function DashboardShell({
           <button onClick={() => setMobileMenuOpen(true)} className="p-1 -ml-1">
             <Menu size={20} className="text-[#A8A6B8]" />
           </button>
-          <div className="text-base font-medium text-[#F5F3ED]">
-            i<span className="text-[#C9A84C]">Vest</span>
+          <div className="text-base font-bold tracking-wider text-[#F5F3ED]">
+            R<span className="text-[#C9A84C]">EACH</span>
           </div>
         </div>
         
@@ -367,8 +367,8 @@ export default function DashboardShell({
           <div className="flex-1 bg-black/50" onClick={() => setMobileMenuOpen(false)} />
           <div className="w-64 bg-[#0F0F1A] border-l border-[#3A3A52] flex flex-col">
             <div className="flex items-center justify-between px-4 py-4 border-b border-[#3A3A52]">
-              <div className="text-lg font-medium text-[#F5F3ED]">
-                i<span className="text-[#C9A84C]">Vest</span>
+              <div className="text-lg font-bold tracking-wider text-[#F5F3ED]">
+                R<span className="text-[#C9A84C]">EACH</span>
               </div>
               <button onClick={() => setMobileMenuOpen(false)}>
                 <X size={20} className="text-[#A8A6B8]" />

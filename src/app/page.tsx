@@ -15,8 +15,45 @@ const STATS = [
   { value: "94%", label: "Match accuracy" },
 ];
 
+const REACH_PILLARS = [
+  {
+    letter: "R",
+    name: "Resources",
+    tagline: "Infrastructure & Toolkits",
+    desc: "Proprietary deal rooms, standardized legal templates, AI startup scoring, and real-time performance analytics.",
+    icon: Shield,
+  },
+  {
+    letter: "E",
+    name: "Entrepreneurs",
+    tagline: "Visionary Builders",
+    desc: "Top-tier founders and engineering innovators building high-growth tech ventures across emerging and global hubs.",
+    icon: Zap,
+  },
+  {
+    letter: "A",
+    name: "Access",
+    tagline: "Direct Connection",
+    desc: "Direct, KYC-verified access connecting entrepreneurs with active global capital allocators without gatekeepers.",
+    icon: Users,
+  },
+  {
+    letter: "C",
+    name: "Capital",
+    tagline: "Smart Funding Pipelines",
+    desc: "Angel networks, syndicate funds, VC partners, and Web3 crypto rails ready to deploy into high-conviction deals.",
+    icon: TrendingUp,
+  },
+  {
+    letter: "H",
+    name: "Horizons",
+    tagline: "Borderless Expansion",
+    desc: "Unlocking cross-border scale, multi-region market entry, and limitless international growth opportunities.",
+    icon: Globe,
+  },
+];
+
 // Real photography, sourced via Lorem Picsum (free-to-use stock photos).
-// Swap the seed values for your own licensed assets when you have them.
 const IMG = {
   hero: "https://picsum.photos/seed/ivest-hero-2026/1800/1100",
   features: [
@@ -112,19 +149,19 @@ const HOW_IT_WORKS = [
 
 const TESTIMONIALS = [
   {
-    quote: "iVest connected me with a FinTech builder in Lagos within 48 hours. We closed a $250K deal in 6 weeks.",
+    quote: "REACH connected me with a FinTech builder in Lagos within 48 hours. We closed a $250K deal in 6 weeks.",
     name: "Marcus T.",
     title: "Angel investor, London",
     avatar: IMG.avatars[0],
   },
   {
-    quote: "As a builder in Nairobi, getting visibility to verified global investors was impossible. iVest changed that.",
+    quote: "As an entrepreneur in Nairobi, getting direct access to verified global capital was impossible. REACH changed that.",
     name: "Amara K.",
     title: "Founder, AgriTech startup",
     avatar: IMG.avatars[1],
   },
   {
-    quote: "The deal pipeline keeps everything organized. I can track 12 active deals without losing my mind.",
+    quote: "The deal pipeline and resources keep everything organized. I can track 12 active deals across horizons effortlessly.",
     name: "David L.",
     title: "Venture partner, Singapore",
     avatar: IMG.avatars[2],
@@ -157,22 +194,20 @@ export default function LandingPage() {
         scrolled ? "bg-[#0F0F1A]/95 backdrop-blur-md border-b border-[#3A3A52]" : "bg-transparent"
       }`}>
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <img src="/logo-icon.png" alt="iVest" className="w-9 h-9 rounded-lg" />
-            <span className="text-lg font-medium tracking-tight flex items-center text-[#C9A84C]">
-  IV
-  <span className="flex flex-col justify-center gap-[3px] mx-[2px] h-[18px] text-[#C9A84C]">
-    {/* Three stacked lines for the stylized E */}
-    <span className="w-[12px] h-[2px] bg-[#C9A84C]"></span>
-    <span className="w-[12px] h-[2px] bg-[#C9A84C]"></span>
-    <span className="w-[12px] h-[2px] bg-[#C9A84C]"></span>
-  </span>
-  ST
-</span>
+          <div className="flex items-center gap-2.5">
+            <img src="/logo-icon.png" alt="REACH" className="w-9 h-9 rounded-lg" />
+            <div className="flex flex-col">
+              <span className="text-xl font-bold tracking-wider text-[#F5F3ED]">
+                R<span className="text-[#C9A84C]">EACH</span>
+              </span>
+              <span className="text-[8px] uppercase tracking-widest text-[#C9A84C] font-semibold -mt-1 hidden sm:block">
+                Resources · Capital · Horizons
+              </span>
+            </div>
           </div>
 
           <div className="hidden md:flex items-center gap-8">
-            {["Features", "How it works", "For investors", "For builders"].map((item) => (
+            {["Pillars", "Features", "How it works", "For investors", "For builders"].map((item) => (
               <a
                 key={item}
                 href={`#${item.toLowerCase().replace(/ /g, "-")}`}
@@ -192,7 +227,7 @@ export default function LandingPage() {
             </button>
             <button
               onClick={() => router.push("/onboarding")}
-              className="bg-[#C9A84C] text-[#1A1A2E] text-sm font-medium px-4 py-2 rounded-lg hover:opacity-90 transition"
+              className="bg-[#C9A84C] text-[#1A1A2E] text-sm font-medium px-4 py-2 rounded-lg hover:opacity-90 transition shadow-lg shadow-[#C9A84C]/20"
             >
               Get started
             </button>
@@ -200,8 +235,7 @@ export default function LandingPage() {
         </div>
       </nav>
 
-      {/* Hero — full-bleed photo with duotone overlay so the image reads
-          as part of the brand rather than a stock photo dropped on top. */}
+      {/* Hero — full-bleed photo with duotone overlay */}
       <section className="relative min-h-screen flex flex-col items-center justify-end px-6 pb-20 text-center overflow-hidden">
         <img
           src={IMG.hero}
@@ -225,20 +259,20 @@ export default function LandingPage() {
         />
 
         <div className="relative z-10 flex flex-col items-center max-w-3xl">
-          <div className="flex items-center gap-2 bg-[#0F0F1A]/60 backdrop-blur border border-[#C9A84C30] rounded-full px-4 py-1.5 mb-8">
+          <div className="flex items-center gap-2 bg-[#0F0F1A]/80 backdrop-blur border border-[#C9A84C30] rounded-full px-4 py-1.5 mb-8">
             <div className="w-1.5 h-1.5 rounded-full bg-[#C9A84C] animate-pulse" />
-            <span className="text-[#C9A84C] text-xs font-medium">
-              Verified investors active now across 67 countries
+            <span className="text-[#C9A84C] text-xs font-semibold uppercase tracking-wider">
+              R · E · A · C · H &nbsp;|&nbsp; Resources · Entrepreneurs · Access · Capital · Horizons
             </span>
           </div>
 
           <h1 className="text-4xl sm:text-5xl md:text-6xl font-medium tracking-tight mb-6 leading-tight">
-            Invest in Innovation.{" "}
-            <span className="text-[#C9A84C]">Build the Future.</span>
+            Empowering Entrepreneurs.{" "}
+            <span className="text-[#C9A84C]">Expanding Horizons.</span>
           </h1>
 
           <p className="text-[#D8D6E8] text-base sm:text-lg max-w-xl mb-10 leading-relaxed">
-            A global, verified investment ecosystem connecting investors and builders securely, across borders.
+            A global, verified investment ecosystem connecting Resources, Entrepreneurs, Access, Capital, and Horizons across borders.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-3">
@@ -276,9 +310,53 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Features — photographic bento grid. Each tile is a real photo with
-          a bottom-anchored caption, not an icon-in-a-box card. */}
-      <section id="features" className="max-w-6xl mx-auto px-6 py-24">
+      {/* REACH Pillars Section — Explaining R · E · A · C · H */}
+      <section id="pillars" className="max-w-6xl mx-auto px-6 py-24">
+        <div className="text-center mb-14">
+          <div className="inline-flex items-center gap-2 bg-[#C9A84C]/10 border border-[#C9A84C]/30 text-[#C9A84C] text-xs font-bold uppercase tracking-widest px-3.5 py-1 rounded-full mb-3">
+            The REACH Framework
+          </div>
+          <h2 className="text-3xl sm:text-4xl font-medium mb-4">
+            What powers <span className="text-[#C9A84C]">R · E · A · C · H</span>
+          </h2>
+          <p className="text-[#A8A6B8] text-sm max-w-xl mx-auto leading-relaxed">
+            Our five-pillar architecture bridges high-potential innovators with the institutional infrastructure, capital, and market horizons needed to scale globally.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          {REACH_PILLARS.map((pillar) => {
+            const Icon = pillar.icon;
+            return (
+              <div
+                key={pillar.letter}
+                className="group relative bg-[#1A1A2E]/80 backdrop-blur border border-[#3A3A52] hover:border-[#C9A84C] p-6 rounded-2xl flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-[#C9A84C]/5"
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-3xl font-black text-[#C9A84C] group-hover:scale-110 transition-transform">
+                      {pillar.letter}
+                    </span>
+                    <div className="w-8 h-8 rounded-lg bg-[#0F0F1A] border border-[#3A3A52] flex items-center justify-center text-[#C9A84C]">
+                      <Icon size={16} />
+                    </div>
+                  </div>
+                  <h3 className="text-[#F5F3ED] text-base font-bold mb-1">{pillar.name}</h3>
+                  <div className="text-[#C9A84C] text-[11px] font-medium uppercase tracking-wider mb-2.5">
+                    {pillar.tagline}
+                  </div>
+                  <p className="text-[#A8A6B8] text-xs leading-relaxed">
+                    {pillar.desc}
+                  </p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Features — photographic bento grid */}
+      <section id="features" className="max-w-6xl mx-auto px-6 py-20 border-t border-[#3A3A52]/50">
         <div className="text-center mb-14">
           <div className="text-[#C9A84C] text-xs font-medium uppercase tracking-widest mb-3">
             Platform features
@@ -287,7 +365,7 @@ export default function LandingPage() {
             Everything you need to close deals
           </h2>
           <p className="text-[#A8A6B8] text-sm max-w-md mx-auto">
-            Built for serious investors and ambitious builders. No noise, no spam just verified connections.
+            Built for serious investors and ambitious entrepreneurs. No noise, no spam — just verified connections.
           </p>
         </div>
 
@@ -313,7 +391,7 @@ export default function LandingPage() {
                 />
                 <div className="relative z-10 h-full flex flex-col justify-end p-5">
                   <div className="w-9 h-9 rounded-lg bg-[#C9A84C] flex items-center justify-center mb-3">
-                    <Icon size={16} className="text-[#1A1A2E]" />
+                    <Icon size={16} />
                   </div>
                   <h3 className="text-[#F5F3ED] text-sm font-medium mb-1.5">{f.title}</h3>
                   <p className="text-[#D8D6E8] text-xs leading-relaxed opacity-90">{f.desc}</p>
@@ -390,7 +468,7 @@ export default function LandingPage() {
               Find deals that match your thesis
             </h3>
             <p className="text-[#A8A6B8] text-sm leading-relaxed mb-6">
-              Stop sifting through unverified pitch decks. iVest surfaces verified startups matched to your exact investment criteria.
+              Stop sifting through unverified pitch decks. REACH surfaces verified startups matched to your exact investment criteria.
             </p>
             <ul className="flex flex-col gap-2 mb-8">
               {[
@@ -420,13 +498,13 @@ export default function LandingPage() {
               <Zap size={18} className="text-[#C9A84C]" />
             </div>
             <div className="text-[#C9A84C] text-xs font-medium uppercase tracking-widest mb-3">
-              For builders
+              For entrepreneurs & builders
             </div>
             <h3 className="text-[#F5F3ED] text-xl font-medium mb-4">
               Raise from investors who actually care
             </h3>
             <p className="text-[#A8A6B8] text-sm leading-relaxed mb-6">
-              Upload your project, set your funding goal, and get discovered by verified global investors. No cold outreach needed.
+              Upload your project, set your funding goal, and get discovered by verified global investors across boundless horizons.
             </p>
             <ul className="flex flex-col gap-2 mb-8">
               {[
@@ -455,7 +533,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Testimonials — real headshot photos instead of initials/no avatar */}
+      {/* Testimonials */}
       <section className="bg-[#1A1A2E] border-y border-[#3A3A52]">
         <div className="max-w-3xl mx-auto px-6 py-24 text-center">
           <Quote size={28} className="text-[#C9A84C] mx-auto mb-8 opacity-60" />
@@ -502,7 +580,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Final CTA — photo banner instead of flat background */}
+      {/* Final CTA */}
       <section className="relative px-6 py-32 text-center overflow-hidden">
         <img src={IMG.cta} alt="" className="absolute inset-0 w-full h-full object-cover" />
         <div
@@ -514,7 +592,7 @@ export default function LandingPage() {
             Ready to connect with the world?
           </h2>
           <p className="text-[#D8D6E8] text-sm mb-10 max-w-md mx-auto">
-            Join thousands of verified investors and builders already using iVest to close deals across borders.
+            Join thousands of verified investors and entrepreneurs already using REACH to close deals across borders.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <button
@@ -541,20 +619,16 @@ export default function LandingPage() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12">
             <div>
               <div className="flex items-center gap-2 mb-4">
-                <img src="/logo-icon.png" alt="iVest" className="w-6 h-6 rounded" />
-                <span className="text-lg font-medium tracking-tight flex items-center text-[#C9A84C]">
-  IV
-  <span className="flex flex-col justify-center gap-[3px] mx-[2px] h-[18px] text-[#C9A84C]">
-    {/* Three stacked lines for the stylized E */}
-    <span className="w-[12px] h-[2px] bg-[#C9A84C]"></span>
-    <span className="w-[12px] h-[2px] bg-[#C9A84C]"></span>
-    <span className="w-[12px] h-[2px] bg-[#C9A84C]"></span>
-  </span>
-  ST
-</span>
+                <img src="/logo-icon.png" alt="REACH" className="w-6 h-6 rounded" />
+                <span className="text-lg font-bold tracking-wider text-[#F5F3ED]">
+                  R<span className="text-[#C9A84C]">EACH</span>
+                </span>
               </div>
+              <p className="text-[#A8A6B8] text-xs leading-relaxed mb-2 font-medium">
+                Resources · Entrepreneurs · Access · Capital · Horizons
+              </p>
               <p className="text-[#5C5A70] text-xs leading-relaxed">
-                Invest in Innovation.<br />Build the Future.
+                Empowering Entrepreneurs.<br />Unlocking Global Horizons.
               </p>
             </div>
             <div>
@@ -574,7 +648,7 @@ export default function LandingPage() {
             <div>
               <div className="text-[#F5F3ED] text-xs font-medium uppercase tracking-wider mb-4">Company</div>
               <div className="flex flex-col gap-2">
-                {["About iVest", "Blog", "Careers", "Press"].map((item) => (
+                {["About REACH", "Blog", "Careers", "Press"].map((item) => (
                   <span key={item} className="text-[#5C5A70] text-xs">{item}</span>
                 ))}
               </div>
@@ -591,7 +665,7 @@ export default function LandingPage() {
 
           <div className="border-t border-[#3A3A52] pt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
             <p className="text-[#5C5A70] text-xs">
-              © 2026 iVest. All rights reserved. Trusted · Verified · Borderless
+              © 2026 REACH. All rights reserved. Resources · Entrepreneurs · Access · Capital · Horizons
             </p>
             <div className="flex items-center gap-4">
               {["Twitter", "LinkedIn", "Discord"].map((s) => (

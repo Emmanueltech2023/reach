@@ -719,7 +719,7 @@ export default function ProfilePage() {
               }}
               className="flex items-center gap-2 text-sm text-red-400 hover:text-red-300 transition w-fit"
             >
-              Sign out of iVest
+              Sign out of REACH
             </button>
           </div>
         </div>

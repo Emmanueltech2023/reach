@@ -608,7 +608,7 @@ export default function TeamPage() {
               </button>
 
               <p className="text-[#5C5A70] text-xs text-center">
-                User must be registered on iVest
+                User must be registered on REACH
               </p>
             </div>
           </div>

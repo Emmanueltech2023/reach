@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
     const buffer = Buffer.from(arrayBuffer);
 
     const uploadResult = await uploadBufferToCloudinary(buffer, {
-      folder: `ivest/projects_${type}`,
+      folder: `reach/projects_${type}`,
       public_id: `${projectId.slice(0, 8)}_${Date.now()}`,
       resource_type: "raw",
     });

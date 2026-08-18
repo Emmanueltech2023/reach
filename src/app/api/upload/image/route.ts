@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
     const buffer = Buffer.from(arrayBuffer);
 
     // Map bucket/path to clean Cloudinary folder hierarchy
-    const cleanFolder = `ivest/${bucket.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+    const cleanFolder = `reach/${bucket.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
     const cleanFileName = (path || file.name)
       .split("/")
       .pop()

@@ -24,7 +24,7 @@ const CONTACT_PATTERNS = [
 const WARNING_PATTERNS = [
   /bypass|avoid|skip.*platform/gi,
   /deal.*outside/gi,
-  /without.*ivest/gi,
+  /without.*(reach|ivest)/gi,
   /directly.*without/gi,
 ];
 
@@ -48,7 +48,7 @@ export function moderateContent(content: string): ModerationResult {
       return {
         flagged: true,
         warningOnly: false,
-        reason: "Sharing personal contact details is not allowed on iVest. All communication must happen within the platform to protect both parties.",
+        reason: "Sharing personal contact details is not allowed on REACH. All communication must happen within the platform to protect both parties.",
         cleanedContent: null,
       };
     }
@@ -62,7 +62,7 @@ export function moderateContent(content: string): ModerationResult {
       return {
         flagged: true,
         warningOnly: true,
-        reason: "This message suggests moving communication off-platform. iVest protects both parties by keeping all deal discussions here.",
+        reason: "This message suggests moving communication off-platform. REACH protects both parties by keeping all deal discussions here.",
         cleanedContent: content,
       };
     }

@@ -59,8 +59,8 @@ export default function CategoryPage() {
 
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-medium text-[#F5F3ED] mb-1">
-            i<span className="text-[#C9A84C]">Vest</span>
+          <h1 className="text-2xl font-bold tracking-wider text-[#F5F3ED] mb-1">
+            R<span className="text-[#C9A84C]">EACH</span>
           </h1>
           <p className="text-[#A8A6B8] text-sm">What is your primary interest?</p>
           <div className="flex justify-center gap-2 mt-4">

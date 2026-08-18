@@ -182,7 +182,7 @@ export async function POST(req: NextRequest) {
         if (authUser?.user?.email) {
           sendEmail({
             to: authUser.user.email,
-            subject: `New message from ${senderName} — iVest`,
+            subject: `New message from ${senderName} — REACH`,
             html: emailTemplates.newMessage(
               recipientProfile?.full_name || "User",
               senderName,

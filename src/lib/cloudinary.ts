@@ -64,7 +64,7 @@ export async function uploadBufferToCloudinary(
   cloudinary.config(config);
 
   const defaultOptions: UploadApiOptions = {
-    folder: "ivest",
+    folder: "reach",
     resource_type: "auto",
     transformation: [
       { quality: "auto", fetch_format: "auto" },

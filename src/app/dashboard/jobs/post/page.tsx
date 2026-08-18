@@ -480,7 +480,7 @@ export default function PostJobPage() {
                     placeholder="https://..."
                     className="w-full rounded-xl border border-[#3A3A52] bg-[#0A0A0F] p-3 pl-10 text-[#F5F3ED] placeholder-[#5C5A70] focus:border-[#C9A84C] focus:outline-none focus:ring-1 focus:ring-[#C9A84C] transition-colors"
                   />
-                  <p className="mt-2 text-xs text-[#5C5A70]">If provided, applicants will be redirected to this link to apply instead of applying via iVest.</p>
+                  <p className="mt-2 text-xs text-[#5C5A70]">If provided, applicants will be redirected to this link to apply instead of applying via REACH.</p>
                 </div>
               </div>
             </div>

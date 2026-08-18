@@ -15,7 +15,7 @@ import { createClient } from "@/lib/supabase/client";
 
 const PAYMENT_DETAILS = {
   bankName: "PAYSTACK",
-  accountName: "iVest International",
+  accountName: "REACH International",
   accountNumber: "0220220220",
   sortCode: "00-00-00",
   usdtAddress: "Your USDT TRC20 address here",

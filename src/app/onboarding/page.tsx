@@ -183,7 +183,7 @@ export default function OnboardingPage() {
             <div className="text-center space-y-2">
               <div className="text-5xl mb-2 drop-shadow-md">{detected.flag}</div>
               <h2 className="text-[#F5F3ED] text-xl font-bold">
-                Welcome to iVest
+                Welcome to REACH
               </h2>
               <p className="text-[#A8A6B8] text-xs leading-relaxed">
                 Smart global detection configured your initial localized settings.
@@ -229,7 +229,7 @@ export default function OnboardingPage() {
           <div className="bg-[#1A1A2E]/90 backdrop-blur-xl border border-[#3A3A52] rounded-2xl p-6 shadow-2xl space-y-6">
             <div className="text-center space-y-1">
               <h2 className="text-[#F5F3ED] text-xl font-bold">
-                How will you use iVest?
+                How will you use REACH?
               </h2>
               <p className="text-[#A8A6B8] text-xs">
                 Select your primary goal on the platform.

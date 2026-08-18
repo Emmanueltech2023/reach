@@ -365,7 +365,7 @@ export default function DealsPage() {
                   <div className="text-[#F5F3ED] text-base font-medium">
                     {selectedDeal.commission_rate}%
                   </div>
-                  <div className="text-[#5C5A70] text-xs mt-0.5">iVest fee</div>
+                  <div className="text-[#5C5A70] text-xs mt-0.5">REACH fee</div>
                 </div>
                 <div className="bg-[#0F0F1A] rounded-xl p-3 text-center">
                   <div className={`text-base font-medium ${isClosed ? "text-emerald-400" : "text-[#5C5A70]"}`}>
@@ -641,7 +641,7 @@ export default function DealsPage() {
               <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-xl p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <DollarSign size={14} className="text-[#C9A84C]" />
-                  <span className="text-[#5C5A70] text-xs">iVest fees due</span>
+                  <span className="text-[#5C5A70] text-xs">REACH fees due</span>
                 </div>
                 <div className="text-[#F5F3ED] text-xl font-medium">
                   {formatCurrency(
@@ -899,7 +899,7 @@ export default function DealsPage() {
               </div>
 
               <div className="bg-[#C9A84C10] border border-[#C9A84C30] rounded-lg px-3 py-2 text-xs text-[#C9A84C]">
-                A 3% commission applies on the final deal size when closed through iVest.
+                A 3% commission applies on the final deal size when closed through REACH.
               </div>
 
               <button

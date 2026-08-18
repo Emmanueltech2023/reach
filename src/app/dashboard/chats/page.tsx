@@ -520,7 +520,7 @@ function ChatsInner() {
               <Users size={16} className="text-[#C9A84C]" />
             </div>
             <div>
-              <div className="text-[#F0EEE8] text-xs font-medium">iVest Community</div>
+              <div className="text-[#F0EEE8] text-xs font-medium">REACH Community</div>
               <div className="text-[#6B6A7A] text-xs">Global deal discussions</div>
             </div>
           </button>

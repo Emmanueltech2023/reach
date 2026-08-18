@@ -83,8 +83,8 @@ export default function RoleSelectionPage() {
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#1A1A2E] border border-[#C9A84C]/20 text-[#C9A84C] text-xs font-semibold mb-3">
             <Sparkles size={12} /> Account Setup
           </div>
-          <h1 className="text-2xl font-bold text-[#F5F3ED] mb-1">
-            i<span className="text-[#C9A84C]">Vest</span>
+          <h1 className="text-2xl font-bold tracking-wider text-[#F5F3ED] mb-1">
+            R<span className="text-[#C9A84C]">EACH</span>
           </h1>
           <p className="text-[#A8A6B8] text-sm">Select your primary role</p>
           <div className="flex justify-center gap-2 mt-4">

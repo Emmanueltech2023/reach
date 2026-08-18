@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
     const resourceType = isImage ? "image" : isAudio || isVideo ? "video" : "raw";
 
     const uploadResult = await uploadBufferToCloudinary(buffer, {
-      folder: `ivest/chat_${conversationId.slice(0, 8)}`,
+      folder: `reach/chat_${conversationId.slice(0, 8)}`,
       resource_type: resourceType,
     });
 

@@ -129,7 +129,7 @@ export async function POST(req: NextRequest) {
       if (email) {
         sendEmail({
           to: email,
-          subject: `⭐ Your iVest ${planLabel} plan is now active`,
+          subject: `⭐ Your REACH ${planLabel} plan is now active`,
           html: emailTemplates.upgradeApproved(fullName, planLabel, userRole),
         }).catch((e) => console.error("Upgrade email failed:", e));
       }

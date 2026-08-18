@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
         await supabase.from("notifications").insert({
           user_id: referrer.id,
           title: "🎉 Referral reward unlocked!",
-          body: `You've referred ${newCount} users to iVest! You now have a ${COMMISSION_CREDIT_PCT}% commission credit applied to your next deal close.`,
+          body: `You've referred ${newCount} users to REACH! You now have a ${COMMISSION_CREDIT_PCT}% commission credit applied to your next deal close.`,
           type: "general",
           action_url: "/dashboard/referrals",
         });
@@ -101,7 +101,7 @@ export async function POST(req: NextRequest) {
       user_id: referrer.id,
       event_type: "referral_signup",
       points: 5,
-      description: `Referred a new user to iVest`,
+      description: `Referred a new user to REACH`,
     });
 
     return NextResponse.json({ success: true, referrerName: referrer.full_name });

@@ -1019,7 +1019,7 @@ export default function CommunityPage() {
             <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-2xl p-4 shadow-lg space-y-3">
               <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#F5F3ED]">
                 <Flame size={15} className="text-[#C9A84C]" />
-                <span>Trending on iVest</span>
+                <span>Trending on REACH</span>
               </div>
               <div className="space-y-2 pt-1">
                 {TRENDING_TAGS.map((item, idx) => (
@@ -1039,7 +1039,7 @@ export default function CommunityPage() {
 
             {/* Quick Links & Platform Rules */}
             <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-2xl p-4 shadow-lg space-y-3">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-[#F5F3ED]">Explore iVest</h3>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-[#F5F3ED]">Explore REACH</h3>
               <div className="space-y-2 text-xs">
                 <button
                   onClick={() => router.push("/dashboard/talent")}

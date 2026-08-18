@@ -7,12 +7,12 @@ import { CurrencyProvider } from "@/components/CurrencyProvider";
 const geist = Geist({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "iVest — Invest in Innovation. Build the Future.",
-  description: "A global verified investment ecosystem connecting investors and builders — securely, across borders.",
-  keywords: ["investment", "startup", "investors", "builders", "DeFi", "FinTech", "Africa", "global"],
+  title: "REACH — Resources · Entrepreneurs · Access · Capital · Horizons",
+  description: "A global verified investment ecosystem connecting Resources, Entrepreneurs, Access, Capital, and Horizons — securely, across borders.",
+  keywords: ["REACH", "investment", "startup", "entrepreneurs", "resources", "capital", "horizons", "access", "DeFi", "FinTech", "Africa", "global"],
   openGraph: {
-    title: "iVest",
-    description: "Invest in Innovation. Build the Future.",
+    title: "REACH",
+    description: "Resources · Entrepreneurs · Access · Capital · Horizons",
     type: "website",
   },
   icons: {

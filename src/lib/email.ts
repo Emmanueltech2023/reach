@@ -1,6 +1,6 @@
 import { Resend } from "resend";
 
-const FROM = process.env.RESEND_FROM_EMAIL || "iVest <onboarding@resend.dev>";
+const FROM = process.env.RESEND_FROM_EMAIL || "REACH <onboarding@resend.dev>";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
 type EmailPayload = {
@@ -48,11 +48,11 @@ export const emailTemplates = {
     <html>
     <body style="font-family: -apple-system, sans-serif; background: #0F0F1A; color: #F5F3ED; padding: 40px 20px; margin: 0;">
       <div style="max-width: 480px; margin: 0 auto; background: #1A1A2E; border-radius: 16px; padding: 32px; border: 1px solid #3A3A52;">
-        <h1 style="font-size: 24px; font-weight: 500; margin: 0 0 4px;">i<span style="color: #C9A84C;">Vest</span></h1>
-        <p style="color: #5C5A70; font-size: 13px; margin: 0 0 24px;">Global Investment Platform</p>
+        <h1 style="font-size: 24px; font-weight: 700; letter-spacing: 1px; margin: 0 0 4px;">R<span style="color: #C9A84C;">EACH</span></h1>
+        <p style="color: #C9A84C; font-size: 11px; margin: 0 0 24px; text-transform: uppercase; letter-spacing: 0.5px;">Resources · Entrepreneurs · Access · Capital · Horizons</p>
         <h2 style="font-size: 18px; font-weight: 500; margin: 0 0 12px;">Welcome, ${name}!</h2>
         <p style="color: #A8A6B8; font-size: 14px; line-height: 1.6; margin: 0 0 24px;">
-          Your account has been created. Complete your identity verification to unlock full platform access and start connecting with verified investors and builders globally.
+          Your account has been created. Complete your identity verification to unlock full platform access and start connecting with verified entrepreneurs and capital allocators globally.
         </p>
         <a href="${APP_URL}/auth/kyc" 
            style="display: inline-block; background: #C9A84C; color: #1A1A2E; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 500; font-size: 14px;">
@@ -71,11 +71,11 @@ export const emailTemplates = {
     <html>
     <body style="font-family: -apple-system, sans-serif; background: #0F0F1A; color: #F5F3ED; padding: 40px 20px; margin: 0;">
       <div style="max-width: 480px; margin: 0 auto; background: #1A1A2E; border-radius: 16px; padding: 32px; border: 1px solid #3A3A52;">
-        <h1 style="font-size: 24px; font-weight: 500; margin: 0 0 4px;">i<span style="color: #C9A84C;">Vest</span></h1>
+        <h1 style="font-size: 24px; font-weight: 700; letter-spacing: 1px; margin: 0 0 4px;">R<span style="color: #C9A84C;">EACH</span></h1>
         <div style="background: #0A2910; border: 1px solid #1A5C2A; border-radius: 12px; padding: 20px; margin: 20px 0;">
           <p style="color: #4ADE80; font-size: 16px; font-weight: 500; margin: 0 0 8px;">✓ Identity Verified</p>
           <p style="color: #A8A6B8; font-size: 14px; margin: 0;">
-            Congratulations ${name}! Your identity has been verified. You now have full access to iVest.
+            Congratulations ${name}! Your identity has been verified. You now have full access to REACH.
           </p>
         </div>
         <a href="${APP_URL}/dashboard/${role}" 
@@ -92,7 +92,7 @@ export const emailTemplates = {
     <html>
     <body style="font-family: -apple-system, sans-serif; background: #0F0F1A; color: #F5F3ED; padding: 40px 20px; margin: 0;">
       <div style="max-width: 480px; margin: 0 auto; background: #1A1A2E; border-radius: 16px; padding: 32px; border: 1px solid #3A3A52;">
-        <h1 style="font-size: 24px; font-weight: 500; margin: 0 0 4px;">i<span style="color: #C9A84C;">Vest</span></h1>
+        <h1 style="font-size: 24px; font-weight: 700; letter-spacing: 1px; margin: 0 0 4px;">R<span style="color: #C9A84C;">EACH</span></h1>
         <div style="background: #2A0A0A; border: 1px solid #5C1A1A; border-radius: 12px; padding: 20px; margin: 20px 0;">
           <p style="color: #F87171; font-size: 16px; font-weight: 500; margin: 0 0 8px;">KYC Submission Rejected</p>
           <p style="color: #A8A6B8; font-size: 14px; margin: 0;">
@@ -113,7 +113,7 @@ export const emailTemplates = {
     <html>
     <body style="font-family: -apple-system, sans-serif; background: #0F0F1A; color: #F5F3ED; padding: 40px 20px; margin: 0;">
       <div style="max-width: 480px; margin: 0 auto; background: #1A1A2E; border-radius: 16px; padding: 32px; border: 1px solid #3A3A52;">
-        <h1 style="font-size: 24px; font-weight: 500; margin: 0 0 4px;">i<span style="color: #C9A84C;">Vest</span></h1>
+        <h1 style="font-size: 24px; font-weight: 700; letter-spacing: 1px; margin: 0 0 4px;">R<span style="color: #C9A84C;">EACH</span></h1>
         <p style="font-size: 16px; font-weight: 500; margin: 20px 0 8px;">📅 Meeting invitation</p>
         <p style="color: #A8A6B8; font-size: 14px; margin: 0 0 20px;">Hi ${name}, ${organizer} has scheduled a meeting with you.</p>
         <div style="background: #0F0F1A; border-radius: 12px; padding: 16px; margin: 0 0 24px;">
@@ -134,7 +134,7 @@ export const emailTemplates = {
     <html>
     <body style="font-family: -apple-system, sans-serif; background: #0F0F1A; color: #F5F3ED; padding: 40px 20px; margin: 0;">
       <div style="max-width: 480px; margin: 0 auto; background: #1A1A2E; border-radius: 16px; padding: 32px; border: 1px solid #3A3A52;">
-        <h1 style="font-size: 24px; font-weight: 500; margin: 0 0 4px;">i<span style="color: #C9A84C;">Vest</span></h1>
+        <h1 style="font-size: 24px; font-weight: 700; letter-spacing: 1px; margin: 0 0 4px;">R<span style="color: #C9A84C;">EACH</span></h1>
         <p style="font-size: 16px; font-weight: 500; margin: 20px 0 8px;">Deal update — ${projectName}</p>
         <div style="background: #C9A84C20; border: 1px solid #C9A84C30; border-radius: 12px; padding: 16px; margin: 0 0 24px;">
           <p style="color: #C9A84C; font-weight: 500; margin: 0 0 4px;">Stage: ${stage}</p>
@@ -154,7 +154,7 @@ export const emailTemplates = {
     <html>
     <body style="font-family: -apple-system, sans-serif; background: #0F0F1A; color: #F5F3ED; padding: 40px 20px; margin: 0;">
       <div style="max-width: 480px; margin: 0 auto; background: #1A1A2E; border-radius: 16px; padding: 32px; border: 1px solid #3A3A52;">
-        <h1 style="font-size: 24px; font-weight: 500; margin: 0 0 4px;">i<span style="color: #C9A84C;">Vest</span></h1>
+        <h1 style="font-size: 24px; font-weight: 700; letter-spacing: 1px; margin: 0 0 4px;">R<span style="color: #C9A84C;">EACH</span></h1>
         <p style="font-size: 16px; font-weight: 500; margin: 20px 0 8px;">💬 New message from ${senderName}</p>
         <div style="background: #0F0F1A; border-radius: 12px; padding: 16px; margin: 0 0 24px; border-left: 3px solid #C9A84C;">
           <p style="color: #A8A6B8; font-size: 14px; margin: 0; font-style: italic;">"${preview}"</p>
@@ -164,7 +164,7 @@ export const emailTemplates = {
           Reply now
         </a>
         <p style="color: #5C5A70; font-size: 12px; margin: 20px 0 0;">
-          You're receiving this because you have email notifications enabled on iVest.
+          You're receiving this because you have email notifications enabled on REACH.
         </p>
       </div>
     </body>
@@ -176,7 +176,7 @@ export const emailTemplates = {
     <html>
     <body style="font-family: -apple-system, sans-serif; background: #0F0F1A; color: #F5F3ED; padding: 40px 20px; margin: 0;">
       <div style="max-width: 480px; margin: 0 auto; background: #1A1A2E; border-radius: 16px; padding: 32px; border: 1px solid #3A3A52;">
-        <h1 style="font-size: 24px; font-weight: 500; margin: 0 0 4px;">i<span style="color: #C9A84C;">Vest</span></h1>
+        <h1 style="font-size: 24px; font-weight: 700; letter-spacing: 1px; margin: 0 0 4px;">R<span style="color: #C9A84C;">EACH</span></h1>
         <p style="font-size: 16px; font-weight: 500; margin: 20px 0 8px;">🎉 Deal closed — Commission invoice</p>
         <p style="color: #A8A6B8; font-size: 14px; margin: 0 0 20px;">
           Congratulations ${name}! Your deal for <strong>${projectName}</strong> has been successfully closed.
@@ -210,7 +210,7 @@ export const emailTemplates = {
     <html>
     <body style="font-family: -apple-system, sans-serif; background: #0F0F1A; color: #F5F3ED; padding: 40px 20px; margin: 0;">
       <div style="max-width: 480px; margin: 0 auto; background: #1A1A2E; border-radius: 16px; padding: 32px; border: 1px solid #3A3A52;">
-        <h1 style="font-size: 24px; font-weight: 500; margin: 0 0 4px;">i<span style="color: #C9A84C;">Vest</span></h1>
+        <h1 style="font-size: 24px; font-weight: 700; letter-spacing: 1px; margin: 0 0 4px;">R<span style="color: #C9A84C;">EACH</span></h1>
         <div style="background: #C9A84C10; border: 1px solid #C9A84C30; border-radius: 12px; padding: 20px; margin: 20px 0;">
           <p style="color: #C9A84C; font-size: 16px; font-weight: 500; margin: 0 0 8px;">⭐ ${plan} plan activated</p>
           <p style="color: #A8A6B8; font-size: 14px; margin: 0;">

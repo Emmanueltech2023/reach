@@ -108,7 +108,7 @@ export default function ReferralsPage() {
             Refer & earn
           </h1>
           <p className="text-[#5C5A70] text-xs mt-0.5">
-            Refer {REWARD_THRESHOLD} verified users to iVest and earn a {10}% commission credit on your next deal close
+            Refer {REWARD_THRESHOLD} verified users to REACH and earn a {10}% commission credit on your next deal close
           </p>
         </div>
 
@@ -218,11 +218,11 @@ export default function ReferralsPage() {
                 {[
                   {
                     label: "Share on X",
-                    url: `https://twitter.com/intent/tweet?text=I'm using iVest to connect with verified global investors and builders. Join me!&url=${encodeURIComponent(referralLink)}`,
+                    url: `https://twitter.com/intent/tweet?text=I'm using REACH to connect with verified global investors and entrepreneurs. Join me!&url=${encodeURIComponent(referralLink)}`,
                   },
                   {
                     label: "Share on WhatsApp",
-                    url: `https://wa.me/?text=${encodeURIComponent(`Join me on iVest — the global investment platform: ${referralLink}`)}`,
+                    url: `https://wa.me/?text=${encodeURIComponent(`Join me on REACH — the global investment platform: ${referralLink}`)}`,
                   },
                 ].map((s) => (
                   <a
@@ -255,7 +255,7 @@ export default function ReferralsPage() {
               {
                 step: "2",
                 title: "They sign up",
-                desc: "Your contact registers and completes KYC verification on iVest",
+                desc: "Your contact registers and completes KYC verification on REACH",
                 icon: Users,
               },
               {
@@ -349,7 +349,7 @@ export default function ReferralsPage() {
         {/* Terms */}
         <p className="text-[#3A3A52] text-xs text-center leading-relaxed">
           Referral reward applies to your first deal close after reaching {REWARD_THRESHOLD} verified referrals. 
-          Referrals must complete KYC verification to count. iVest reserves the right to modify the referral program at any time.
+          Referrals must complete KYC verification to count. REACH reserves the right to modify the referral program at any time.
         </p>
       </div>
     </DashboardShell>

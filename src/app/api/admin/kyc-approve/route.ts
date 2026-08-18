@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
     const notification = supabase.from("notifications").insert({
       user_id: userId,
       title: action === "approve" ? "KYC Approved ✓" : "KYC Rejected",
-      body: action === "approve" ? "You have full access to iVest." : "Please resubmit documents.",
+      body: action === "approve" ? "You have full access to REACH." : "Please resubmit documents.",
       type: "kyc",
       action_url: action === "approve" ? dashUrl : "/auth/kyc",
     });
@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
     const emailTask = email 
       ? sendEmail({
           to: email,
-          subject: action === "approve" ? "✓ Your iVest identity is verified" : "iVest — KYC update",
+          subject: action === "approve" ? "✓ Your REACH identity is verified" : "REACH — KYC update",
           html: action === "approve" ? emailTemplates.kycApproved(userName, role || "investor") : emailTemplates.kycRejected(userName),
         }).catch(err => console.error("Email failed:", err))
       : Promise.resolve();

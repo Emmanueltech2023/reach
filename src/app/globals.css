@@ -1,6 +1,9 @@
 @import "tailwindcss";
 
 :root {
+  --reach-gold: #C9A84C;
+  --reach-gold-dark: #7A5F1E;
+  --reach-ink: #1A1A2E;
   --ivest-gold: #C9A84C;
   --ivest-gold-dark: #7A5F1E;
   --ivest-ink: #1A1A2E;

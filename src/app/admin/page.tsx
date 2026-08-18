@@ -506,7 +506,7 @@ export default function AdminPage() {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `ivest_users_export_${new Date().toISOString().split("T")[0]}.csv`);
+    link.setAttribute("download", `reach_users_export_${new Date().toISOString().split("T")[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -574,12 +574,12 @@ export default function AdminPage() {
       <header className="border-b border-[#3A3A52]/80 bg-[#0F0F1A] px-6 py-3.5 flex items-center justify-between sticky top-0 z-30 shadow-md">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#C9A84C] to-[#997828] flex items-center justify-center text-[#0A0A0F] font-black text-base shadow-md">
-              iV
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#C9A84C] to-[#997828] flex items-center justify-center text-[#0A0A0F] font-black text-sm shadow-md">
+              R
             </div>
             <div>
               <h1 className="text-base font-bold tracking-tight text-[#F5F3ED] flex items-center gap-2">
-                <span>iVest Enterprise Command</span>
+                <span>REACH Enterprise Command</span>
                 <span className="text-[10px] px-2 py-0.2 rounded-full bg-[#C9A84C]/15 border border-[#C9A84C]/30 text-[#C9A84C] font-semibold">
                   Admin OS
                 </span>
@@ -1242,7 +1242,7 @@ export default function AdminPage() {
                 <div>
                   <h2 className="text-lg font-bold text-[#F5F3ED] flex items-center gap-2">
                     <Settings size={18} className="text-[#C9A84C]" />
-                    <span>iVest Operating System Architecture & Data Schema</span>
+                    <span>REACH Operating System Architecture & Data Schema</span>
                   </h2>
                   <p className="text-xs text-[#5C5A70] mt-0.5">Official operational documentation and integration specifications</p>
                 </div>
