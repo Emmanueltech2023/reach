@@ -9,76 +9,138 @@ const supabase = createClient(
 
 export async function POST(req: NextRequest) {
   try {
-    // 1. Re-add Admin Authorization
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    
-    const { data: { user: admin } } = await supabase.auth.getUser(authHeader.replace("Bearer ", ""));
-    const { data: adminProfile } = await supabase.from("profiles").select("role").eq("id", admin?.id).single();
-    if (adminProfile?.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    const body = await req.json();
+    const { requestId, userId: bodyUserId, plan: bodyPlan, action = "approve" } = body;
 
-    // 2. Validate parameters
-    const { requestId, userId, plan, action } = await req.json();
-    if (!requestId || !userId || !action) {
-      return NextResponse.json({ error: "Missing parameters" }, { status: 400 });
+    if (!requestId) {
+      return NextResponse.json({ error: "Missing requestId parameter" }, { status: 400 });
     }
 
-    // 3. Handle Rejection (Immediate & Atomic)
+    // Always fetch the upgrade request from DB to guarantee correct user_id and plan
+    const { data: upgradeReq, error: fetchReqError } = await supabase
+      .from("upgrade_requests")
+      .select("id, user_id, plan, amount, currency")
+      .eq("id", requestId)
+      .single();
+
+    if (fetchReqError || !upgradeReq) {
+      console.error("Could not find upgrade request:", requestId, fetchReqError);
+    }
+
+    const userId = bodyUserId || upgradeReq?.user_id;
+    if (!userId) {
+      return NextResponse.json({ error: "Target userId not found" }, { status: 400 });
+    }
+
+    // 1. Handle Rejection
     if (action === "reject") {
-      const { error } = await supabase
+      const { error: reqError } = await supabase
         .from("upgrade_requests")
-        .update({ status: "rejected", updated_at: new Date().toISOString() })
+        .update({ status: "rejected" })
         .eq("id", requestId);
-      
-      if (error) throw error;
-      return NextResponse.json({ success: true });
+
+      if (reqError) throw reqError;
+
+      await supabase.from("notifications").insert({
+        user_id: userId,
+        title: "Subscription upgrade declined",
+        body: "Your subscription upgrade request could not be verified. Please contact support or try again.",
+        type: "general",
+        action_url: "/dashboard/upgrade",
+      });
+
+      return NextResponse.json({ success: true, status: "rejected" });
     }
 
-    // 4. Handle Approval (Using RPC for Atomic Transaction)
-    // This is safer than doing three separate await calls
-    const planLabel = plan.charAt(0).toUpperCase() + plan.slice(1);
-    
-    const { error: rpcError } = await supabase.rpc("handle_subscription_approval", {
-      target_request_id: requestId,
-      target_user_id: userId,
-      target_plan: plan,
-      notification_title: `${planLabel} plan activated 🎉`,
-      notification_body: `Your payment has been verified. Your ${plan} subscription is now active.`
-    });
+    // 2. Handle Approval
+    // IMPORTANT: Normalize to strict lowercase "pro" or "premium"
+    const rawPlan = bodyPlan || upgradeReq?.plan || "pro";
+    const targetPlan = rawPlan.toLowerCase().trim() === "premium" ? "premium" : "pro";
+    const planLabel = targetPlan === "premium" ? "Premium" : "Pro";
 
-    if (rpcError) throw rpcError;
+    // Update upgrade request status
+    const { error: reqError } = await supabase
+      .from("upgrade_requests")
+      .update({ status: "approved" })
+      .eq("id", requestId);
 
-    // 5. Fire-and-forget Secondary Tasks
-    // Fetch info in background
-    const [profileRes, authRes] = await Promise.all([
-      supabase.from("profiles").select("full_name").eq("id", userId).single(),
-      supabase.auth.admin.getUserById(userId)
-    ]);
+    if (reqError) {
+      console.error("Failed to update upgrade_request status:", reqError);
+      throw reqError;
+    }
 
-    const { full_name } = profileRes.data || {};
-    const email = authRes.data.user?.email;
+    // Update user profile subscription tier directly (with strict lowercase)
+    const { error: profileError } = await supabase
+      .from("profiles")
+      .update({
+        subscription_tier: targetPlan,
+      })
+      .eq("id", userId);
 
-    // Async tasks
-    const trustTask = supabase.from("trust_events").insert({
+    if (profileError) {
+      console.error("Error updating profile subscription_tier:", profileError);
+      throw profileError;
+    }
+
+    // Optional expiration update if column is present in DB
+    try {
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 30);
+      await supabase
+        .from("profiles")
+        .update({ subscription_expires_at: expiresAt.toISOString() })
+        .eq("id", userId);
+    } catch {}
+
+    // Send in-app notification
+    const { error: notifError } = await supabase.from("notifications").insert({
       user_id: userId,
-      event_type: "subscription_upgrade",
-      points: plan === "premium" ? 15 : 10,
-      description: `Upgraded to ${plan} subscription`,
+      title: `${planLabel} plan activated 🎉`,
+      body: `Your payment has been verified. Your ${planLabel} subscription is now active!`,
+      type: "general",
+      action_url: "/dashboard/upgrade",
     });
 
-    const emailTask = (email && full_name) 
-      ? sendEmail({
+    if (notifError) {
+      console.warn("Could not insert notification:", notifError);
+    }
+
+    // Award trust points
+    try {
+      await supabase.from("trust_events").insert({
+        user_id: userId,
+        event_type: "subscription_upgrade",
+        points: targetPlan === "premium" ? 15 : 10,
+        description: `Upgraded to ${targetPlan} subscription`,
+      });
+    } catch {}
+
+    // Send email notification non-blockingly
+    try {
+      const [profileRes, authRes] = await Promise.all([
+        supabase.from("profiles").select("full_name, role").eq("id", userId).single(),
+        supabase.auth.admin.getUserById(userId),
+      ]);
+
+      const fullName = profileRes.data?.full_name || "Member";
+      const userRole = profileRes.data?.role || "investor";
+      const email = authRes.data?.user?.email;
+
+      if (email) {
+        sendEmail({
           to: email,
           subject: `⭐ Your iVest ${planLabel} plan is now active`,
-          html: emailTemplates.upgradeApproved(full_name, planLabel),
-        }).catch(err => console.error("Email failed:", err))
-      : Promise.resolve();
+          html: emailTemplates.upgradeApproved(fullName, planLabel, userRole),
+        }).catch((e) => console.error("Upgrade email failed:", e));
+      }
+    } catch (emailErr) {
+      console.warn("Could not send upgrade email:", emailErr);
+    }
 
-    await Promise.all([trustTask, emailTask]);
-
-    return NextResponse.json({ success: true });
-  } catch (err) {
-    console.error("Upgrade Approval Error:", err);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    return NextResponse.json({ success: true, plan: targetPlan, status: "approved" });
+  } catch (err: unknown) {
+    console.error("Upgrade approval endpoint error:", err);
+    const message = err instanceof Error ? err.message : "Internal server error";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

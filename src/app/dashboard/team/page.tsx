@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import DashboardShell from "@/components/DashboardShell";
+import { useSubscription } from "@/hooks/useSubscription";
 import {
   Users,
   Plus,
@@ -13,6 +14,7 @@ import {
   Crown,
   Eye,
   MessageCircle,
+  Zap,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
@@ -63,6 +65,7 @@ export default function TeamPage() {
   const [inviteRole, setInviteRole] = useState("collaborator");
   const [inviting, setInviting] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
+  const { features } = useSubscription();
   const [inviteSuccess, setInviteSuccess] = useState(false);
 
   const fetchMembers = useCallback(async (projectId: string) => {
@@ -174,20 +177,7 @@ export default function TeamPage() {
     setInviteUsername("");
     setInviting(false);
 
-    // 2. Fire and forget the notification request in the background
-    fetch("/api/notifications/create", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        userId: data.user.id,
-        title: "Team invitation",
-        body: `${profile.full_name} added you to the ${selectedProject.name} team as ${inviteRole}.`,
-        type: "general",
-        actionUrl: "/dashboard/chats",
-      }),
-    }).catch((err) => console.error("Notification failed to send:", err));
-
-    // 3. Clear the success banner after 3 seconds
+    // Clear the success banner after 3 seconds
     setTimeout(() => setInviteSuccess(false), 3000);
   };
 
@@ -235,14 +225,24 @@ export default function TeamPage() {
             </p>
           </div>
           {selectedProject && (
-            <button
-              onClick={() => setShowInvite(true)}
-              className="flex items-center gap-2 bg-[#C9A84C] text-[#1A1A2E] text-sm font-medium px-4 py-2 rounded-lg hover:opacity-90 transition"
-            >
-              <Plus size={15} />
-              Invite
-            </button>
-          )}
+  features.canMessageFirst ? (
+    <button
+      onClick={() => setShowInvite(true)}
+      className="flex items-center gap-2 bg-[#C9A84C] text-[#1A1A2E] text-sm font-medium px-4 py-2 rounded-lg hover:opacity-90 transition"
+    >
+      <Plus size={15} />
+      Invite
+    </button>
+  ) : (
+    <button
+      onClick={() => router.push("/dashboard/upgrade")}
+      className="flex items-center gap-2 border border-[#C9A84C30] text-[#C9A84C] text-sm px-4 py-2 rounded-lg hover:bg-[#C9A84C10] transition"
+    >
+      <Zap size={14} />
+      Upgrade to invite
+    </button>
+  )
+)}
         </div>
 
         {loading ? (

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import DashboardShell from "@/components/DashboardShell";
 import {
   Bell, MessageCircle, Calendar, TrendingUp,
-  ShieldCheck, Star, Info, Loader2, CheckCheck,
+  ShieldCheck, Star, Info, Loader2, CheckCheck, Briefcase
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
@@ -24,9 +24,10 @@ function timeAgo(dateStr: string) {
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return "just now";
   if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
 }
 
 const TYPE_CONFIG: Record<string, {
@@ -40,6 +41,7 @@ const TYPE_CONFIG: Record<string, {
   kyc: { icon: ShieldCheck, color: "text-yellow-400", bg: "bg-yellow-900/30" },
   match: { icon: Star, color: "text-[#C9A84C]", bg: "bg-[#C9A84C20]" },
   interest: { icon: TrendingUp, color: "text-emerald-400", bg: "bg-emerald-900/30" },
+  job_application: { icon: Briefcase, color: "text-[#C9A84C]", bg: "bg-[#C9A84C20]" },
   general: { icon: Info, color: "text-[#A8A6B8]", bg: "bg-[#1A1A2E]" },
 };
 
@@ -183,7 +185,7 @@ export default function NotificationsPage() {
 
   return (
     <DashboardShell 
-      role={(profile?.role as "investor" | "builder") || "investor"} 
+      role={profile?.role} 
       unreadNotificationCount={unreadCount}
     >
       <div className="max-w-3xl mx-auto space-y-6">

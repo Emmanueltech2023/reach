@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
+import { uploadBufferToCloudinary } from "@/lib/cloudinary";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -28,29 +29,23 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Upload to Supabase Storage
-    const fileExt = file.name.split(".").pop();
-    const fileName = `${conversationId}/${Date.now()}-${Math.random()
-      .toString(36)
-      .slice(2)}.${fileExt}`;
+    // Convert file to Buffer
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
 
-    const { error: uploadError } = await supabase.storage
-      .from("chat-files")
-      .upload(fileName, file, {
-        contentType: file.type,
-        upsert: false,
-      });
+    // Detect resource type
+    const isImage = file.type.startsWith("image/");
+    const isAudio = file.type.startsWith("audio/");
+    const isVideo = file.type.startsWith("video/");
+    const resourceType = isImage ? "image" : isAudio || isVideo ? "video" : "raw";
 
-    if (uploadError) throw uploadError;
+    const uploadResult = await uploadBufferToCloudinary(buffer, {
+      folder: `ivest/chat_${conversationId.slice(0, 8)}`,
+      resource_type: resourceType,
+    });
 
-    // Get signed URL (valid for 7 days)
-    const { data: signedData, error: signedError } = await supabase.storage
-      .from("chat-files")
-      .createSignedUrl(fileName, 60 * 60 * 24 * 7);
-
-    if (signedError || !signedData) {
-      throw new Error(signedError?.message || "Failed to generate signed asset URL");
-    }
+    // Determine message type
+    const messageType = isImage ? "image" : isAudio ? "audio" : "file";
 
     // Save message to database
     const { data: message, error: msgError } = await supabase
@@ -59,10 +54,10 @@ export async function POST(req: NextRequest) {
         conversation_id: conversationId,
         sender_id: senderId,
         content: file.name,
-        message_type: "file",
-        file_url: signedData.signedUrl,
+        message_type: messageType,
+        file_url: uploadResult.url,
         file_name: file.name,
-        delivery_status: "sent", // Modified: Replaced dropped `is_read: false` column
+        delivery_status: "sent",
       })
       .select(`*, profiles(id, full_name, username, avatar_url, is_verified)`)
       .single();
@@ -71,7 +66,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ message });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Unknown error";
+    console.error("Chat upload failed with Cloudinary:", err);
+    const message = err instanceof Error ? err.message : "Chat file upload failed";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

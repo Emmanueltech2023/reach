@@ -17,6 +17,7 @@ import {
   MapPin,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { useCurrency } from "@/components/CurrencyProvider";
 
 type Project = {
   id: string;
@@ -74,6 +75,7 @@ function getColor(id: string) {
 
 export default function InvestorDashboard() {
   const router = useRouter();
+  const { formatCurrency } = useCurrency();
   const supabase = useMemo(() => createClient(), []);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);

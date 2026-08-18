@@ -8,6 +8,8 @@ import {
   CheckCircle, Globe, X, MapPin, ExternalLink, Loader2, Calendar, Eye
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import TierBadge from "@/components/TierBadge";
+import { useCurrency } from "@/components/CurrencyProvider";
 
 type Project = {
   id: string;
@@ -36,6 +38,7 @@ type Project = {
     is_verified: boolean;
     trust_score: number;
     country: string;
+    subscription_tier?: "free" | "pro" | "premium";
   };
 };
 
@@ -60,6 +63,7 @@ const STAGE_LABELS: Record<string, string> = {
 export default function ProjectDetailPage() {
   const router = useRouter();
   const params = useParams();
+  const { formatCurrency } = useCurrency();
   const supabase = createClient();
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
@@ -86,7 +90,7 @@ export default function ProjectDetailPage() {
 
       const { data } = await supabase
         .from("projects")
-        .select(`*, profiles(id, full_name, username, avatar_url, is_verified, trust_score, country)`)
+        .select(`*, profiles(id, full_name, username, avatar_url, is_verified, trust_score, country, subscription_tier)`)
         .eq("id", params.id)
         .single();
 
@@ -319,6 +323,7 @@ export default function ProjectDetailPage() {
                     <div className="flex items-center gap-1.5">
                       <span className="text-[#F5F3ED] text-sm font-semibold">{project.profiles?.full_name}</span>
                       {project.profiles?.is_verified && <CheckCircle size={14} className="text-emerald-400 shrink-0" />}
+                      <TierBadge tier={(project.profiles?.subscription_tier as "free" | "pro" | "premium") || "free"} />
                     </div>
                     <div className="text-[#5C5A70] text-xs mt-0.5">
                       @{project.profiles?.username} {project.profiles?.country && `· ${project.profiles.country}`}

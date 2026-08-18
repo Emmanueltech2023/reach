@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { sendEmail, emailTemplates } from "@/lib/email";
+import { getUserTier, tierCanDo } from "@/lib/tierCheck";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -61,6 +62,19 @@ export async function POST(req: NextRequest) {
 
     if (!investorId || !projectId) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+
+    // 2. Add Tier Enforcement Check
+    const tier = await getUserTier(investorId);
+    if (!tierCanDo(tier, "canAccessDeals")) {
+      return NextResponse.json(
+        {
+          error: "Deal pipeline access requires a Pro or Premium plan.",
+          upgradeRequired: true,
+          requiredTier: "pro",
+        },
+        { status: 403 }
+      );
     }
 
     // Check no existing active deal between same investor + project

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import "./globals.css";
 import Web3Provider from "@/components/Web3Provider";
+import { CurrencyProvider } from "@/components/CurrencyProvider";
 
 const geist = Geist({ subsets: ["latin"] });
 
@@ -28,9 +29,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={geist.className}>
-        <Web3Provider>
-          {children}
-        </Web3Provider>
+        <CurrencyProvider>
+          <Web3Provider>
+            {children}
+          </Web3Provider>
+        </CurrencyProvider>
       </body>
     </html>
   );

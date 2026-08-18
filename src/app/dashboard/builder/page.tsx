@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import DashboardShell from "@/components/DashboardShell";
+import { useSubscription } from "@/hooks/useSubscription";
 import {
   LayoutGrid,
   MessageCircle,
@@ -14,6 +15,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { useCurrency } from "@/components/CurrencyProvider";
 
 type Project = {
   id: string;
@@ -43,9 +45,11 @@ function getRaisedPercent(goal: number, raised: number) {
 
 export default function BuilderDashboard() {
   const router = useRouter();
+  const { formatCurrency } = useCurrency();
   const supabase = useMemo(() => createClient(), []);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
+  const { features } = useSubscription();
   const [profile, setProfile] = useState<{
     full_name: string;
     username: string;
@@ -125,18 +129,34 @@ export default function BuilderDashboard() {
 
         {/* Upload */}
         <button
-          onClick={() => router.push("/dashboard/builder/upload")}
-          className="w-full flex items-center justify-between bg-[#C9A84C] text-[#1A1A2E] rounded-xl px-4 py-3 hover:opacity-90 transition"
-        >
-          <div className="flex items-center gap-3">
-            <Plus size={18} />
-            <div className="text-left">
-              <div className="text-sm font-medium">Upload new project</div>
-              <div className="text-xs opacity-70">Connect with global investors</div>
-            </div>
-          </div>
-          <ChevronRight size={16} />
-        </button>
+  onClick={() => {
+    if (features.maxProjects !== -1 && projects.length >= features.maxProjects) {
+      router.push("/dashboard/upgrade");
+    } else {
+      router.push("/dashboard/builder/upload");
+    }
+  }}
+  className="w-full flex items-center justify-between bg-[#C9A84C] text-[#1A1A2E] rounded-xl px-4 py-3 hover:opacity-90 transition"
+>
+  <div className="flex items-center gap-3">
+    <Plus size={18} />
+    <div className="text-left">
+      <div className="text-sm font-medium">
+        {features.maxProjects !== -1 && projects.length >= features.maxProjects
+          ? "Upgrade to add more projects"
+          : "Upload new project"
+        }
+      </div>
+      <div className="text-xs opacity-70">
+        {features.maxProjects !== -1 && projects.length >= features.maxProjects
+          ? `Free plan: ${features.maxProjects} project limit`
+          : "Connect with global investors"
+        }
+      </div>
+    </div>
+  </div>
+  <ChevronRight size={16} />
+</button>
 
         {/* My projects label */}
         <div>

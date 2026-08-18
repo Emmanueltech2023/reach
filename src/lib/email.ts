@@ -1,8 +1,7 @@
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
-const FROM = "iVest <noreply@ivest.io>"; // Update with your verified domain
+const FROM = process.env.RESEND_FROM_EMAIL || "iVest <onboarding@resend.dev>";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
 type EmailPayload = {
   to: string;
@@ -11,10 +10,16 @@ type EmailPayload = {
 };
 
 export async function sendEmail({ to, subject, html }: EmailPayload) {
-  if (!process.env.RESEND_API_KEY) {
+  // 1. Check for the key first
+  const apiKey = process.env.RESEND_API_KEY;
+  
+  if (!apiKey) {
     console.log("[Email] No API key — skipping:", subject, "to", to);
     return { success: false };
   }
+
+  // 2. Initialize only when we actually need it
+  const resend = new Resend(apiKey);
 
   try {
     const { data, error } = await resend.emails.send({
@@ -49,7 +54,7 @@ export const emailTemplates = {
         <p style="color: #A8A6B8; font-size: 14px; line-height: 1.6; margin: 0 0 24px;">
           Your account has been created. Complete your identity verification to unlock full platform access and start connecting with verified investors and builders globally.
         </p>
-        <a href="${process.env.NEXT_PUBLIC_APP_URL}/auth/kyc" 
+        <a href="${APP_URL}/auth/kyc" 
            style="display: inline-block; background: #C9A84C; color: #1A1A2E; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 500; font-size: 14px;">
           Complete KYC verification
         </a>
@@ -61,7 +66,7 @@ export const emailTemplates = {
     </html>
   `,
 
-  kycApproved: (name: string) => `
+  kycApproved: (name: string, role: string = "investor") => `
     <!DOCTYPE html>
     <html>
     <body style="font-family: -apple-system, sans-serif; background: #0F0F1A; color: #F5F3ED; padding: 40px 20px; margin: 0;">
@@ -73,7 +78,7 @@ export const emailTemplates = {
             Congratulations ${name}! Your identity has been verified. You now have full access to iVest.
           </p>
         </div>
-        <a href="${process.env.NEXT_PUBLIC_APP_URL}/dashboard/investor" 
+        <a href="${APP_URL}/dashboard/${role}" 
            style="display: inline-block; background: #C9A84C; color: #1A1A2E; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 500; font-size: 14px;">
           Go to dashboard
         </a>
@@ -94,7 +99,7 @@ export const emailTemplates = {
             Hi ${name}, your KYC submission was not approved. Please resubmit with clearer, valid documents.
           </p>
         </div>
-        <a href="${process.env.NEXT_PUBLIC_APP_URL}/auth/kyc" 
+        <a href="${APP_URL}/auth/kyc" 
            style="display: inline-block; background: #C9A84C; color: #1A1A2E; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 500; font-size: 14px;">
           Resubmit documents
         </a>
@@ -115,7 +120,7 @@ export const emailTemplates = {
           <p style="color: #C9A84C; font-weight: 500; margin: 0 0 4px;">${meetingTitle}</p>
           <p style="color: #5C5A70; font-size: 13px; margin: 0;">${date}</p>
         </div>
-        <a href="${process.env.NEXT_PUBLIC_APP_URL}/dashboard/meetings" 
+        <a href="${APP_URL}/dashboard/meetings" 
            style="display: inline-block; background: #C9A84C; color: #1A1A2E; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 500; font-size: 14px;">
           View meeting
         </a>
@@ -135,7 +140,7 @@ export const emailTemplates = {
           <p style="color: #C9A84C; font-weight: 500; margin: 0 0 4px;">Stage: ${stage}</p>
           ${amount ? `<p style="color: #A8A6B8; font-size: 13px; margin: 0;">Deal size: $${amount.toLocaleString()}</p>` : ""}
         </div>
-        <a href="${process.env.NEXT_PUBLIC_APP_URL}/dashboard/deals" 
+        <a href="${APP_URL}/dashboard/deals" 
            style="display: inline-block; background: #C9A84C; color: #1A1A2E; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 500; font-size: 14px;">
           View deal pipeline
         </a>
@@ -154,7 +159,7 @@ export const emailTemplates = {
         <div style="background: #0F0F1A; border-radius: 12px; padding: 16px; margin: 0 0 24px; border-left: 3px solid #C9A84C;">
           <p style="color: #A8A6B8; font-size: 14px; margin: 0; font-style: italic;">"${preview}"</p>
         </div>
-        <a href="${process.env.NEXT_PUBLIC_APP_URL}/dashboard/chats" 
+        <a href="${APP_URL}/dashboard/chats" 
            style="display: inline-block; background: #C9A84C; color: #1A1A2E; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 500; font-size: 14px;">
           Reply now
         </a>
@@ -191,7 +196,7 @@ export const emailTemplates = {
           </div>
           <p style="color: #5C5A70; font-size: 12px; margin: 8px 0 0;">Due by ${dueDate}</p>
         </div>
-        <a href="${process.env.NEXT_PUBLIC_APP_URL}/dashboard/deals" 
+        <a href="${APP_URL}/dashboard/deals" 
            style="display: inline-block; background: #C9A84C; color: #1A1A2E; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 500; font-size: 14px;">
           View deal
         </a>
@@ -200,7 +205,7 @@ export const emailTemplates = {
     </html>
   `,
 
-  upgradeApproved: (name: string, plan: string) => `
+  upgradeApproved: (name: string, plan: string, role: string = "investor") => `
     <!DOCTYPE html>
     <html>
     <body style="font-family: -apple-system, sans-serif; background: #0F0F1A; color: #F5F3ED; padding: 40px 20px; margin: 0;">
@@ -212,7 +217,7 @@ export const emailTemplates = {
             Welcome to ${plan}, ${name}! Your payment has been verified and your subscription is now active.
           </p>
         </div>
-        <a href="${process.env.NEXT_PUBLIC_APP_URL}/dashboard/investor" 
+        <a href="${APP_URL}/dashboard/${role}" 
            style="display: inline-block; background: #C9A84C; color: #1A1A2E; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 500; font-size: 14px;">
           Explore your new features
         </a>

@@ -6,7 +6,8 @@ import { useRouter, usePathname } from "next/navigation";
 import {
   Compass, MessageCircle, Calendar, Bookmark,
   User, LayoutGrid, Upload, TrendingUp, Users,
-  Bell, LogOut, Menu, X, Handshake, Sparkles,
+  Bell, LogOut, Menu, X, Handshake, Sparkles, Gift,
+  Briefcase, Search, FileText
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
@@ -25,6 +26,8 @@ const INVESTOR_NAV: NavItem[] = [
   { id: "meetings", icon: Calendar, label: "Meetings", href: "/dashboard/meetings" },
   { id: "bookmarks", icon: Bookmark, label: "Saved", href: "/dashboard/bookmarks" },
   { id: "community", icon: Users, label: "Community", href: "/dashboard/community" },
+  { id: "referrals", icon: Gift, label: "Refer & earn", href: "/dashboard/referrals" },
+  { id: "post-job", icon: Briefcase, label: "Post a Job", href: "/dashboard/jobs/post" },
   { id: "profile", icon: User, label: "Profile", href: "/dashboard/profile" },
 ];
 
@@ -37,6 +40,18 @@ const BUILDER_NAV: NavItem[] = [
   { id: "deals", icon: Handshake, label: "Deals", href: "/dashboard/deals" },
   { id: "community", icon: Users, label: "Community", href: "/dashboard/community" },
   { id: "team", icon: Users, label: "Team", href: "/dashboard/team" },
+  { id: "post-job", icon: Briefcase, label: "Post a Job", href: "/dashboard/jobs/post" },
+  { id: "referrals", icon: Gift, label: "Refer & earn", href: "/dashboard/referrals" },
+  { id: "profile", icon: User, label: "Profile", href: "/dashboard/profile" },
+];
+
+const TALENT_NAV: NavItem[] = [
+  { id: "jobs", icon: Search, label: "Browse Jobs", href: "/dashboard/talent" },
+  { id: "applications", icon: FileText, label: "Applications", href: "/dashboard/talent/applications" },
+  { id: "saved", icon: Bookmark, label: "Saved Jobs", href: "/dashboard/talent/saved" },
+  { id: "chats", icon: MessageCircle, label: "Messages", href: "/dashboard/chats" },
+  { id: "community", icon: Users, label: "Community", href: "/dashboard/community" },
+  { id: "referrals", icon: Gift, label: "Refer & earn", href: "/dashboard/referrals" },
   { id: "profile", icon: User, label: "Profile", href: "/dashboard/profile" },
 ];
 
@@ -63,7 +78,25 @@ export default function DashboardShell({
   const pathname = usePathname();
   const supabase = createClient();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  
+  const [currentRole, setCurrentRole] = useState<string>(role || "investor");
+
+  useEffect(() => {
+    if (role) {
+      setCurrentRole(role);
+      try {
+        sessionStorage.setItem("user_role", role);
+        localStorage.setItem("user_role", role);
+      } catch {}
+    } else {
+      try {
+        const cached = sessionStorage.getItem("user_role") || localStorage.getItem("user_role");
+        if (cached && (cached === "talent" || cached === "builder" || cached === "investor")) {
+          setCurrentRole(cached);
+        }
+      } catch {}
+    }
+  }, [role]);
+
   const [notifCount, setNotifCount] = useState<number | null>(
     unreadNotificationCount > 0 ? unreadNotificationCount : null
   );
@@ -78,8 +111,39 @@ export default function DashboardShell({
     avatarUrl: avatarUrl ?? null,
   });
 
-  const selectedRole = role === "builder" ? "builder" : "investor";
-  const navItems = selectedRole === "investor" ? INVESTOR_NAV : BUILDER_NAV;
+  // Keep userData in sync whenever parent component props change
+  useEffect(() => {
+    if (fullName || username || avatarUrl !== undefined) {
+      setUserData(prev => ({
+        fullName: fullName !== undefined && fullName !== "" ? fullName : prev.fullName,
+        username: username !== undefined && username !== "" ? username : prev.username,
+        avatarUrl: avatarUrl !== undefined ? avatarUrl : prev.avatarUrl,
+      }));
+    }
+  }, [fullName, username, avatarUrl]);
+
+  // Global event listener for instant profile updates across all pages
+  useEffect(() => {
+    const handleProfileUpdate = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail) {
+        setUserData(prev => ({
+          fullName: detail.full_name || detail.fullName || prev.fullName,
+          username: detail.username || prev.username,
+          avatarUrl: detail.avatar_url !== undefined ? detail.avatar_url : detail.avatarUrl !== undefined ? detail.avatarUrl : prev.avatarUrl,
+        }));
+        if (detail.role) {
+          setCurrentRole(detail.role);
+        }
+      }
+    };
+
+    window.addEventListener("profile-updated", handleProfileUpdate);
+    return () => window.removeEventListener("profile-updated", handleProfileUpdate);
+  }, []);
+
+  const selectedRole = currentRole === "builder" ? "builder" : currentRole === "talent" ? "talent" : "investor";
+  const navItems = selectedRole === "talent" ? TALENT_NAV : selectedRole === "builder" ? BUILDER_NAV : INVESTOR_NAV;
 
   const getInitials = (name: string) => {
     if (!name) return "?";
@@ -88,6 +152,10 @@ export default function DashboardShell({
 
   const handleLogout = async () => {
     try {
+      if (typeof window !== "undefined") {
+        sessionStorage.removeItem("user_role");
+        localStorage.removeItem("user_role");
+      }
       await supabase.auth.signOut();
       router.push("/");
     } catch (err) {
@@ -97,9 +165,11 @@ export default function DashboardShell({
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
 
-  const displayNotifCount = unreadNotificationCount > 0 ? unreadNotificationCount : notifCount ?? 0;
+  const displayNotifCount = unreadNotificationCount !== undefined ? unreadNotificationCount : (notifCount ?? 0);
 
   useEffect(() => {
+    let channel: any;
+
     const fetchUserDataAndNotifications = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
@@ -107,7 +177,7 @@ export default function DashboardShell({
 
         const { data: profile } = await supabase
           .from("profiles")
-          .select("full_name, username, avatar_url")
+          .select("full_name, username, avatar_url, role")
           .eq("id", user.id)
           .single();
 
@@ -117,9 +187,16 @@ export default function DashboardShell({
             username: profile.username || "",
             avatarUrl: profile.avatar_url || null,
           });
+          if (profile.role) {
+            setCurrentRole(profile.role);
+            if (typeof window !== "undefined") {
+              sessionStorage.setItem("user_role", profile.role);
+              localStorage.setItem("user_role", profile.role);
+            }
+          }
         }
 
-        if (unreadNotificationCount === 0) {
+        const fetchCount = async () => {
           const { count, error } = await supabase
             .from("notifications")
             .select("id", { count: "exact", head: true })
@@ -129,31 +206,59 @@ export default function DashboardShell({
           if (!error && count !== null) {
             setNotifCount(count);
           }
+        };
+
+        if (unreadNotificationCount === undefined) {
+          await fetchCount();
         }
+
+        // Realtime subscription for live notifications with unique channel ID
+        const channelName = `notifications-${user.id}-${Date.now()}`;
+        channel = supabase
+          .channel(channelName)
+          .on(
+            "postgres_changes",
+            {
+              event: "*",
+              schema: "public",
+              table: "notifications",
+              filter: `user_id=eq.${user.id}`,
+            },
+            () => {
+              fetchCount();
+            }
+          )
+          .subscribe();
+
       } catch (err) {
         console.error("Dashboard shell bootstrap profile/count resolution failed:", err);
       }
     };
 
     fetchUserDataAndNotifications();
-  }, [supabase, pathname, unreadNotificationCount]);
+
+    return () => {
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+    };
+  }, [supabase, unreadNotificationCount]);
 
   return (
-    /* 💡 FIXED: Added overflow-x-hidden here to ensure layout shifts are stopped at the root level */
-    <div className="min-h-screen bg-[#0F0F1A] flex w-full max-w-full overflow-x-hidden">
+    <div className="min-h-screen bg-[#0F0F1A] flex w-full max-w-full overflow-x-clip">
 
       {/* Desktop Sidebar */}
-      <aside className="hidden md:flex flex-col w-56 border-r border-[#3A3A52] shrink-0 fixed top-0 left-0 h-full z-30 bg-[#0F0F1A]">
+      <aside suppressHydrationWarning className="hidden md:flex flex-col w-56 border-r border-[#3A3A52] shrink-0 fixed top-0 left-0 h-full z-30 bg-[#0F0F1A]">
         <div className="px-5 py-5 border-b border-[#3A3A52]">
           <div className="text-xl font-medium text-[#F5F3ED]">
             i<span className="text-[#C9A84C]">Vest</span>
           </div>
-          <div className="text-xs text-[#5C5A70] mt-0.5 capitalize">
-            {role} dashboard
+          <div suppressHydrationWarning className="text-xs text-[#5C5A70] mt-0.5 capitalize">
+            {currentRole} dashboard
           </div>
         </div>
 
-        <nav className="flex-1 px-3 py-4 flex flex-col gap-1 overflow-y-auto">
+        <nav suppressHydrationWarning className="flex-1 px-3 py-4 flex flex-col gap-1 overflow-y-auto">
           {navItems.map((item) => {
             const Icon = item.icon;
             const active = isActive(item.href);
@@ -310,7 +415,7 @@ export default function DashboardShell({
 
       {/* Main Content Pane */}
       {/* 💡 FIXED: Swapped out md:ml-56 block behavior for standard desktop margin structure, added min-w-0, w-full, and layout bounds containment hooks */}
-      <main className="flex-1 flex flex-col min-w-0 w-full max-w-full md:pl-56 overflow-x-hidden">
+      <main className="flex-1 flex flex-col min-w-0 w-full max-w-full md:pl-56 overflow-x-clip">
         
         {/* Desktop Header Spacer */}
         <div className="hidden md:flex items-center justify-between px-6 py-3 border-b border-[#3A3A52] sticky top-0 bg-[#0F0F1A] z-20 w-full">
@@ -331,14 +436,13 @@ export default function DashboardShell({
         </div>
 
         {/* Inner Content Grid */}
-        {/* 💡 FIXED: Added responsive top tracking (pt-20 vs pt-4) to match mobile top bar clearances nicely without crowding headers */}
-        <div className="w-full max-w-5xl mx-auto px-4 md:px-6 pt-20 md:pt-4 pb-24 md:pb-8 overflow-x-hidden">
+        <div className="w-full max-w-7xl mx-auto px-3 sm:px-4 md:px-6 pt-20 md:pt-4 pb-24 md:pb-8 overflow-x-clip">
           {children}
         </div>
       </main>
 
       {/* Mobile Bottom Footer Navigation Tray */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-[#0F0F1A] border-t border-[#3A3A52] flex z-30 h-16 shadow-lg">
+      <nav suppressHydrationWarning className="md:hidden fixed bottom-0 left-0 right-0 bg-[#0F0F1A] border-t border-[#3A3A52] flex z-30 h-16 shadow-lg">
         {navItems.slice(0, 5).map((item) => {
           const Icon = item.icon;
           const active = isActive(item.href);

@@ -60,6 +60,8 @@ const handleComplete = async () => {
 
   if (profile?.role === "builder") {
     router.push("/dashboard/builder");
+  } else if (profile?.role === "talent") {
+    router.push("/dashboard/talent");
   } else {
     router.push("/dashboard/investor");
   }

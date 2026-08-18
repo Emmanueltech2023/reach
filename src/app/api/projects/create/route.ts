@@ -1,5 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
+// 1. Import your new tier utilities
+import { getUserTier, getTierRules } from "@/lib/tierCheck";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -20,6 +22,31 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
+    // 2. Perform Tier Enforcement Check
+    const userTier = await getUserTier(founderId);
+    const rules = getTierRules(userTier);
+
+    if (rules.maxProjects !== -1) {
+      const { count, error: countError } = await supabase
+        .from("projects")
+        .select("*", { count: "exact", head: true })
+        .eq("founder_id", founderId);
+
+      if (countError) throw countError;
+
+      if ((count || 0) >= rules.maxProjects) {
+        return NextResponse.json(
+          {
+            error: `Your ${userTier} plan allows up to ${rules.maxProjects} project${rules.maxProjects === 1 ? "" : "s"}. Upgrade to publish more.`,
+            upgradeRequired: true,
+            requiredTier: "pro",
+          },
+          { status: 403 }
+        );
+      }
+    }
+
+    // 3. Proceed with Insertion (Original logic)
     const { data, error } = await supabase
       .from("projects")
       .insert({
@@ -37,7 +64,7 @@ export async function POST(req: NextRequest) {
         website: website || null,
         twitter: twitter || null,
         stage: stage || "idea",
-        tier: tier || "free",
+        tier: userTier, // Use the actual verified tier from your DB check
         logo_url: logoUrl || null,
         banner_url: bannerUrl || null,
         is_published: true,

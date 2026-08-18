@@ -48,7 +48,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Logged in — enforce role-based dashboard routing
-  if (user && (pathname.startsWith("/dashboard/investor") || pathname.startsWith("/dashboard/builder"))) {
+  if (user && (pathname.startsWith("/dashboard/investor") || pathname.startsWith("/dashboard/builder") || pathname.startsWith("/dashboard/talent"))) {
     const { data: profile } = await supabase
       .from("profiles")
       .select("role")
@@ -58,15 +58,21 @@ export async function middleware(request: NextRequest) {
     if (profile?.role) {
       const url = request.nextUrl.clone();
 
-      // Builder trying to access investor dashboard → redirect to builder
-      if (profile.role === "builder" && pathname.startsWith("/dashboard/investor")) {
+      // Builder trying to access investor or talent dashboard → redirect to builder
+      if (profile.role === "builder" && (pathname.startsWith("/dashboard/investor") || pathname.startsWith("/dashboard/talent"))) {
         url.pathname = "/dashboard/builder";
         return NextResponse.redirect(url);
       }
 
-      // Investor trying to access builder dashboard → redirect to investor
-      if (profile.role === "investor" && pathname.startsWith("/dashboard/builder")) {
+      // Investor trying to access builder or talent dashboard → redirect to investor
+      if (profile.role === "investor" && (pathname.startsWith("/dashboard/builder") || pathname.startsWith("/dashboard/talent"))) {
         url.pathname = "/dashboard/investor";
+        return NextResponse.redirect(url);
+      }
+
+      // Talent trying to access builder or investor dashboard → redirect to talent
+      if (profile.role === "talent" && (pathname.startsWith("/dashboard/builder") || pathname.startsWith("/dashboard/investor"))) {
+        url.pathname = "/dashboard/talent";
         return NextResponse.redirect(url);
       }
     }
@@ -81,7 +87,9 @@ export async function middleware(request: NextRequest) {
       .single();
 
     const url = request.nextUrl.clone();
-    url.pathname = profile?.role === "builder"
+    url.pathname = profile?.role === "talent"
+      ? "/dashboard/talent"
+      : profile?.role === "builder"
       ? "/dashboard/builder"
       : "/dashboard/investor";
     return NextResponse.redirect(url);

@@ -45,7 +45,9 @@ export async function GET(req: NextRequest) {
             full_name,
             username,
             avatar_url,
-            is_verified
+            is_verified,
+            subscription_tier,
+            trust_score
           )
         )
       `)
@@ -72,7 +74,7 @@ export async function GET(req: NextRequest) {
     });
 
     // 4. Assemble the exact data contract expected by your WhatsApp UI page template
-    const formattedConversations = convos.map((c) => {
+    const formattedConversations = (convos || []).map((c) => {
       // Find the first matching participant that is not the current user
       const otherPart = c.conversation_participants?.find(
         (p: any) => p.user_id !== userId

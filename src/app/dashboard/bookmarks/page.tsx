@@ -122,7 +122,7 @@ export default function BookmarksPage() {
 
   return (
     <DashboardShell
-      role={profile?.role as "investor" | "builder" || "investor"}
+      role={profile?.role}
       fullName={profile?.full_name}
       username={profile?.username}
     >

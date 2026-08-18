@@ -4,13 +4,17 @@ import { useCallback, useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import DashboardShell from "@/components/DashboardShell";
+import UpgradeGate from "@/components/UpgradeGate";
+import { useSubscription } from "@/hooks/useSubscription";
 import {
   Camera, CheckCircle, Globe, X,
   Link2, MapPin, Loader2, Save, Edit2,
-  DollarSign,
+  DollarSign, Zap, Sparkles, Eye, EyeOff, ShieldCheck,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import WalletConnect from "@/components/WalletConnect";
+import { useCurrency } from "@/components/CurrencyProvider";
+import { getSupportedCurrencies } from "@/lib/currency";
 
 const INVESTMENT_FOCUS_OPTIONS = [
   "FinTech","HealthTech","EdTech","AgriTech","DeFi",
@@ -41,16 +45,32 @@ type Profile = {
   subscription_tier: string;
   wallet_address: string | null;
   wallet_verified: boolean;
+  is_anonymous?: boolean;
 };
 
 export default function ProfilePage() {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
+  const { features } = useSubscription();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+
+  const toggleAnonymousMode = async () => {
+    if (!profile) return;
+    const newStatus = !profile.is_anonymous;
+    setProfile({ ...profile, is_anonymous: newStatus });
+    await fetch("/api/profile/update", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userId: profile.id,
+        updates: { is_anonymous: newStatus },
+      }),
+    });
+  };
   const [bannerPreview, setBannerPreview] = useState<string | null>(null);
   const [form, setForm] = useState({
     full_name: "",
@@ -62,6 +82,7 @@ export default function ProfilePage() {
     investment_focus: [] as string[],
     min_ticket_size: "",
     max_ticket_size: "",
+    preferred_currency: "",
   });
 
   // Define fetchProfile outside to use in other handlers
@@ -88,6 +109,7 @@ export default function ProfilePage() {
         investment_focus: data.investment_focus || [],
         min_ticket_size: data.min_ticket_size?.toString() || "",
         max_ticket_size: data.max_ticket_size?.toString() || "",
+        preferred_currency: (data as any).preferred_currency || "USD",
       });
     }
     setLoading(false);
@@ -126,16 +148,40 @@ export default function ProfilePage() {
       method: "POST",
       body: formData,
     });
-    const { url } = await res.json();
+    const data = await res.json();
+    const url = data.url;
 
-    await fetch("/api/profile/update", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        userId: profile?.id,
-        updates: type === "avatar" ? { avatar_url: url } : { banner_url: url },
-      }),
-    });
+    if (url) {
+      if (type === "avatar") {
+        setAvatarPreview(url);
+        setProfile((prev) => (prev ? { ...prev, avatar_url: url } : prev));
+      } else {
+        setBannerPreview(url);
+        setProfile((prev) => (prev ? { ...prev, banner_url: url } : prev));
+      }
+
+      await fetch("/api/profile/update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: profile?.id,
+          updates: type === "avatar" ? { avatar_url: url } : { banner_url: url },
+        }),
+      });
+
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("profile-updated", {
+            detail: {
+              avatar_url: type === "avatar" ? url : profile?.avatar_url,
+              full_name: profile?.full_name,
+              username: profile?.username,
+              role: profile?.role,
+            },
+          })
+        );
+      }
+    }
   };
 
   const toggleFocus = (focus: string) => {
@@ -163,6 +209,7 @@ export default function ProfilePage() {
           linkedin: form.linkedin,
           twitter: form.twitter,
           country: form.country,
+          preferred_currency: form.preferred_currency,
           investment_focus: form.investment_focus,
           min_ticket_size: form.min_ticket_size
             ? parseFloat(form.min_ticket_size)
@@ -177,11 +224,24 @@ export default function ProfilePage() {
     await fetchProfile();
     setEditing(false);
     setSaving(false);
+
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("profile-updated", {
+          detail: {
+            full_name: form.full_name,
+            username: profile.username,
+            avatar_url: avatarPreview || profile.avatar_url,
+            role: profile.role,
+          },
+        })
+      );
+    }
   };
 
   if (loading) {
     return (
-      <DashboardShell role={profile?.role as "investor" | "builder" || "investor"}>
+      <DashboardShell role={profile?.role}>
         <div className="flex items-center justify-center py-20">
           <Loader2 size={24} className="text-[#C9A84C] animate-spin" />
         </div>
@@ -191,7 +251,7 @@ export default function ProfilePage() {
 
   return (
     <DashboardShell
-      role={profile?.role as "investor" | "builder" || "investor"}
+      role={profile?.role}
       fullName={profile?.full_name}
       username={profile?.username}
       avatarUrl={avatarPreview || profile?.avatar_url}
@@ -393,6 +453,18 @@ export default function ProfilePage() {
                     className="w-full bg-[#0F0F1A] border border-[#3A3A52] text-[#F5F3ED] text-sm rounded-lg px-4 py-2.5 outline-none focus:border-[#C9A84C] transition placeholder-[#5C5A70]" />
                 </div>
                 <div>
+                  <label className="text-[#A8A6B8] text-xs mb-1.5 block">Preferred Currency</label>
+                  <select value={form.preferred_currency}
+                    onChange={(e) => setForm({ ...form, preferred_currency: e.target.value })}
+                    className="w-full bg-[#0F0F1A] border border-[#3A3A52] text-[#F5F3ED] text-sm rounded-lg px-4 py-2.5 outline-none focus:border-[#C9A84C] transition">
+                    {getSupportedCurrencies().map((c) => (
+                      <option key={c.code} value={c.code}>
+                        {c.symbol} {c.name} ({c.code})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
                   <label className="text-[#A8A6B8] text-xs mb-1.5 block">Website</label>
                   <input value={form.website} placeholder="https://yoursite.com"
                     onChange={(e) => setForm({ ...form, website: e.target.value })}
@@ -419,6 +491,12 @@ export default function ProfilePage() {
                   <div className="flex items-center gap-2 text-sm text-[#A8A6B8]">
                     <MapPin size={14} className="text-[#5C5A70]" />
                     {profile.country}
+                  </div>
+                )}
+                {(profile as any)?.preferred_currency && (
+                  <div className="flex items-center gap-2 text-sm text-[#A8A6B8]">
+                    <DollarSign size={14} className="text-[#5C5A70]" />
+                    Currency: {(profile as any).preferred_currency}
                   </div>
                 )}
                 {profile?.website && (
@@ -533,6 +611,102 @@ export default function ProfilePage() {
             </div>
           </>
         )}
+
+        {/* Anonymous Mode (Investor only) */}
+        {profile?.role === "investor" && (
+          <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-xl p-5 flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-[#C9A84C15] border border-[#C9A84C30] flex items-center justify-center">
+                  {profile.is_anonymous ? <EyeOff size={18} className="text-[#C9A84C]" /> : <Eye size={18} className="text-[#C9A84C]" />}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-[#F5F3ED] text-sm font-medium">Anonymous Investor Mode</h3>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full border bg-[#C9A84C20] text-[#C9A84C] border-[#C9A84C30] font-medium">
+                      Premium
+                    </span>
+                  </div>
+                  <p className="text-[#5C5A70] text-xs mt-0.5">
+                    Hide your name, photo, and company from founders while keeping your verified badge intact.
+                  </p>
+                </div>
+              </div>
+
+              {features.canBrowseAnonymously ? (
+                <button
+                  onClick={toggleAnonymousMode}
+                  className={`w-12 h-6 rounded-full transition relative p-1 ${
+                    profile.is_anonymous ? "bg-[#C9A84C]" : "bg-[#3A3A52]"
+                  }`}
+                >
+                  <div
+                    className={`w-4 h-4 rounded-full bg-[#1A1A2E] transition transform ${
+                      profile.is_anonymous ? "translate-x-6" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+              ) : (
+                <button
+                  onClick={() => router.push("/dashboard/upgrade")}
+                  className="text-xs text-[#C9A84C] border border-[#C9A84C30] bg-[#C9A84C10] px-3 py-1.5 rounded-lg hover:bg-[#C9A84C20] transition font-medium"
+                >
+                  Upgrade
+                </button>
+              )}
+            </div>
+            {profile.is_anonymous && (
+              <div className="bg-[#C9A84C10] border border-[#C9A84C25] text-[#C9A84C] text-xs rounded-lg px-3 py-2 flex items-center gap-2">
+                <ShieldCheck size={14} className="shrink-0" />
+                <span>Anonymous Mode is Active. Your identity is hidden in public browsing & feeds.</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Subscription Tier Details */}
+        <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-xl p-5 flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                features.tier === "premium"
+                  ? "bg-[#C9A84C15] border border-[#C9A84C30] text-[#C9A84C]"
+                  : features.tier === "pro"
+                  ? "bg-blue-900/30 border border-blue-800 text-blue-400"
+                  : "bg-[#0A0A0F] border border-[#3A3A52] text-[#5C5A70]"
+              }`}>
+                {features.tier === "premium" ? <Sparkles size={18} /> : features.tier === "pro" ? <Zap size={18} /> : <ShieldCheck size={18} />}
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-[#F5F3ED] text-sm font-medium">Subscription Plan</h3>
+                  <span className={`text-xs px-2.5 py-0.5 rounded-full border font-semibold capitalize ${
+                    features.tier === "premium"
+                      ? "bg-[#C9A84C20] text-[#C9A84C] border-[#C9A84C30]"
+                      : features.tier === "pro"
+                      ? "bg-blue-900/30 text-blue-400 border-blue-800"
+                      : "bg-[#0A0A0F] text-[#5C5A70] border-[#3A3A52]"
+                  }`}>
+                    {features.tier}
+                  </span>
+                </div>
+                <p className="text-[#5C5A70] text-xs mt-0.5">
+                  {features.tier === "premium"
+                    ? "Full access to AI startup scoring, deal rooms & anonymous mode."
+                    : features.tier === "pro"
+                    ? "Unlimited messaging, meeting booking & analytics access."
+                    : "Free tier access with standard messaging and search limits."}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => router.push("/dashboard/upgrade")}
+              className="text-xs font-medium text-[#F5F3ED] bg-[#0A0A0F] border border-[#3A3A52] px-3.5 py-2 rounded-xl hover:border-[#C9A84C] transition"
+            >
+              {features.tier === "premium" ? "Manage Plan" : "Upgrade Plan"}
+            </button>
+          </div>
+        </div>
 
         {/* Danger zone */}
         <div className="bg-[#1A1A2E] border border-red-900/30 rounded-xl p-4">

@@ -1,51 +1,59 @@
-import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+import { uploadBufferToCloudinary } from "@/lib/cloudinary";
 
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
     const file = formData.get("file") as File;
-    const bucket = formData.get("bucket") as string;
-    const path = formData.get("path") as string;
+    const bucket = (formData.get("bucket") as string) || "general";
+    const path = (formData.get("path") as string) || "uploads";
 
-    if (!file || !bucket || !path) {
+    if (!file) {
       return NextResponse.json(
-        { error: "Missing required fields" },
+        { error: "No file provided" },
         { status: 400 }
       );
     }
 
-    if (file.size > 5 * 1024 * 1024) {
+    // Limit maximum file size to 10MB
+    if (file.size > 10 * 1024 * 1024) {
       return NextResponse.json(
-        { error: "File too large. Maximum 5MB." },
+        { error: "File too large. Maximum size is 10MB." },
         { status: 400 }
       );
     }
 
-    const fileExt = file.name.split(".").pop();
-    const fileName = `${path}-${Date.now()}.${fileExt}`;
+    // Convert file to Buffer
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
 
-    const { error: uploadError } = await supabase.storage
-      .from(bucket)
-      .upload(fileName, file, {
-        contentType: file.type,
-        upsert: true,
-      });
+    // Map bucket/path to clean Cloudinary folder hierarchy
+    const cleanFolder = `ivest/${bucket.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+    const cleanFileName = (path || file.name)
+      .split("/")
+      .pop()
+      ?.replace(/\.[^/.]+$/, "")
+      .replace(/[^a-zA-Z0-9_-]/g, "_") || "asset";
 
-    if (uploadError) throw uploadError;
+    // Detect resource type (raw for pdf/docs, image for photos/media)
+    const isDoc = file.type.includes("pdf") || file.type.includes("document") || file.name.endsWith(".pdf");
+    const resourceType = isDoc ? "raw" : "image";
 
-    const { data } = supabase.storage
-      .from(bucket)
-      .getPublicUrl(fileName);
+    const uploadResult = await uploadBufferToCloudinary(buffer, {
+      folder: cleanFolder,
+      public_id: `${cleanFileName}_${Date.now()}`,
+      resource_type: resourceType,
+    });
 
-    return NextResponse.json({ url: data.publicUrl });
+    return NextResponse.json({
+      url: uploadResult.url,
+      publicId: uploadResult.public_id,
+      format: uploadResult.format,
+      bytes: uploadResult.bytes,
+    });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Unknown error";
+    console.error("Cloudinary upload failed in /api/upload/image:", err);
+    const message = err instanceof Error ? err.message : "Image upload to Cloudinary failed";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -16,6 +16,14 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Missing userId parameter" }, { status: 400 });
     }
 
+    const authHeader = req.headers.get("Authorization");
+    if (authHeader) {
+      const { data: { user } } = await supabase.auth.getUser(authHeader.replace("Bearer ", ""));
+      if (user && user.id !== userId) {
+        return NextResponse.json({ error: "Unauthorized access to notifications" }, { status: 403 });
+      }
+    }
+
     const { data, error } = await supabase
       .from("notifications")
       .select("*")
@@ -35,6 +43,14 @@ export async function PATCH(req: NextRequest) {
   try {
     const body = await req.json();
     const { notificationId, userId } = body;
+
+    const authHeader = req.headers.get("Authorization");
+    if (authHeader && userId) {
+      const { data: { user } } = await supabase.auth.getUser(authHeader.replace("Bearer ", ""));
+      if (user && user.id !== userId) {
+        return NextResponse.json({ error: "Unauthorized operation" }, { status: 403 });
+      }
+    }
 
     // Case A: Mark a single notification as read
     if (notificationId) {

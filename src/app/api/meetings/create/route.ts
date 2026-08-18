@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { sendEmail, emailTemplates } from "@/lib/email";
+import { getUserTier, tierCanDo } from "@/lib/tierCheck";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -25,6 +26,19 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+
+    //Tier enforcer check after getting organizerId
+const tier = await getUserTier(organizerId);
+if (!tierCanDo(tier, "canScheduleMeetings")) {
+  return NextResponse.json(
+    {
+      error: "Meeting scheduling requires a Pro or Premium plan.",
+      upgradeRequired: true,
+      requiredTier: "pro",
+    },
+    { status: 403 }
+  );
+}
 
     // Create meeting
     const { data: meeting, error: meetingError } = await supabase
@@ -59,26 +73,26 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    const formattedDate = new Date(scheduledAt).toLocaleString("en-US", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZoneName: "short",
+    });
+
     // Send system message in chat
     if (conversationId) {
-      const scheduledDate = new Date(scheduledAt).toLocaleString("en-US", {
-        weekday: "long",
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-        timeZoneName: "short",
-      });
-
       await supabase.from("messages").insert({
         conversation_id: conversationId,
         sender_id: organizerId,
-        content: `📅 MEETING SCHEDULED\n\n"${title}"\n${scheduledDate}\n\nAgenda: ${
+        content: `📅 MEETING SCHEDULED\n\n"${title}"\n${formattedDate}\n\nAgenda: ${
           agenda || "No agenda provided"
         }\n\nAll participants will receive email reminders.`,
         message_type: "system",
-        is_read: false,
+        delivery_status: "sent",
       });
     }
 
@@ -89,21 +103,12 @@ export async function POST(req: NextRequest) {
       .eq("id", organizerId)
       .single();
 
-    const formattedDate = new Date(scheduledAt).toLocaleString("en-US", {
-      weekday: "long",
-      month: "long",
-      day: "numeric",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-
-    // Send email to participant
+    // Notify participant if available
     if (participantId) {
       await supabase.from("notifications").insert({
         user_id: participantId,
-        title: `Meeting scheduled: ${title}`,
-        body: `${organizer?.full_name} scheduled a meeting with you for ${formattedDate}`,
+        title: "New Meeting Scheduled",
+        body: `${organizer?.full_name || "Someone"} scheduled a meeting with you for ${formattedDate}`,
         type: "meeting",
         action_url: "/dashboard/meetings",
       });
@@ -115,17 +120,17 @@ export async function POST(req: NextRequest) {
         .eq("id", participantId)
         .single();
 
-      if (participantAuth?.user?.email && participantProfile?.full_name) {
+      if (participantAuth?.user?.email) {
         await sendEmail({
           to: participantAuth.user.email,
           subject: `📅 Meeting: ${title} — iVest`,
           html: emailTemplates.meetingInvite(
-            participantProfile.full_name,
+            participantProfile?.full_name || "User",
             title,
             formattedDate,
             organizer?.full_name || "Someone"
           ),
-        });
+        }).catch((err) => console.error("Meeting email send error:", err));
       }
     }
 

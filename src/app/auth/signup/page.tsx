@@ -17,6 +17,12 @@ export default function SignUpPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [referralCode, setReferralCode] = useState(
+    typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("ref") || ""
+      : ""
+  );
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
@@ -27,19 +33,19 @@ export default function SignUpPage() {
     setError(null);
 
     try {
-  // Check username is unique
-const checkRes = await fetch("/api/profile/check-username", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ username: form.username }),
-});
-const { taken } = await checkRes.json();
+      // Check username is unique
+      const checkRes = await fetch("/api/profile/check-username", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: form.username }),
+      });
+      const { taken } = await checkRes.json();
 
-if (taken) {  
-  setError("Username already taken. Please choose another.");
-  setLoading(false);
-  return;
-}
+      if (taken) {  
+        setError("Username already taken. Please choose another.");
+        setLoading(false);
+        return;
+      }
 
       // Create auth user
       const { data, error: signUpError } = await supabase.auth.signUp({
@@ -54,28 +60,40 @@ if (taken) {
 
       if (signUpError) throw signUpError;
 
-  if (data.user) {
-  // Use service role API route to bypass RLS timing issue
-  const res = await fetch("/api/profile/update", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      userId: data.user.id,
-      updates: {
-        username: form.username,
-        phone: form.phone,
-        full_name: form.fullName,
-      },
-    }),
-  });
+      if (data.user) {
+        // Use service role API route to bypass RLS timing issue
+        const res = await fetch("/api/profile/update", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId: data.user.id,
+            updates: {
+              username: form.username,
+              phone: form.phone,
+              full_name: form.fullName,
+            },
+          }),
+        });
 
-  if (!res.ok) {
-    const data = await res.json();
-    throw new Error(data.error || "Profile update failed");
-  }
+        if (!res.ok) {
+          const resData = await res.json();
+          throw new Error(resData.error || "Profile update failed");
+        }
 
-  router.push("/auth/role");
-}
+        // Claim referral code if present
+        if (referralCode.trim() && data.user) {
+          fetch("/api/referrals/claim", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              referralCode: referralCode.trim(),
+              newUserId: data.user.id,
+            }),
+          }).catch(() => {}); // non-blocking
+        }
+
+        router.push("/auth/role");
+      }
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : "Something went wrong.";
@@ -174,6 +192,19 @@ if (taken) {
               onChange={handleChange}
               placeholder="Min. 8 characters"
               className="w-full bg-[#1A1A2E] border border-[#3A3A52] text-[#F5F3ED] text-sm rounded-lg px-4 py-3 outline-none focus:border-[#C9A84C] transition placeholder-[#5C5A70]"
+            />
+          </div>
+          
+          <div>
+            <label className="text-[#A8A6B8] text-xs mb-1.5 block">
+              Referral code (optional)
+            </label>
+            <input
+              value={referralCode}
+              onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
+              placeholder="e.g. IVST1234"
+              className="w-full bg-[#1A1A2E] border border-[#3A3A52] text-[#F5F3ED] text-sm rounded-lg px-4 py-3 outline-none focus:border-[#C9A84C] transition placeholder-[#5C5A70] font-mono uppercase tracking-wider"
+              maxLength={8}
             />
           </div>
 

@@ -3,7 +3,6 @@ import { createClient } from "@/lib/supabase/server";
 import { PLANS } from "@/lib/constants";
 import { z } from "zod";
 
-// Define schema for input validation
 const upgradeSchema = z.object({
   planId: z.string(),
   paymentMethod: z.enum(["bank", "usdt"]),
@@ -14,28 +13,43 @@ const upgradeSchema = z.object({
 export async function POST(req: Request) {
   const supabase = await createClient();
 
-  // 1. Verify User Auth
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // 2. Parse and Validate Body
   const body = await req.json();
   const validation = upgradeSchema.safeParse(body);
   if (!validation.success) {
-    return NextResponse.json({ error: "Invalid request data" }, { status: 400 });
+    console.error("Validation errors:", validation.error.errors);
+    return NextResponse.json(
+      { error: "Invalid request data", details: validation.error.errors },
+      { status: 400 }
+    );
   }
 
   const { planId, paymentMethod, reference, notes } = validation.data;
 
-  // 3. Server-Side Price Lookup (Prevents Client-Side Tampering)
   const plan = PLANS.find((p) => p.id === planId);
   if (!plan) {
     return NextResponse.json({ error: "Invalid plan selected" }, { status: 400 });
   }
 
-  // 4. Save to Database
+  // Check for existing pending request
+  const { data: existing } = await supabase
+    .from("upgrade_requests")
+    .select("id")
+    .eq("user_id", user.id)
+    .eq("status", "pending")
+    .single();
+
+  if (existing) {
+    return NextResponse.json(
+      { error: "You already have a pending upgrade request. Please wait for approval before submitting another." },
+      { status: 400 }
+    );
+  }
+
   const { error: dbError } = await supabase
     .from("upgrade_requests")
     .insert({
@@ -45,9 +59,8 @@ export async function POST(req: Request) {
       currency: "USD",
       payment_method: paymentMethod,
       reference,
-      notes,
+      notes: notes || null,
       status: "pending",
-      created_at: new Date().toISOString(),
     });
 
   if (dbError) {

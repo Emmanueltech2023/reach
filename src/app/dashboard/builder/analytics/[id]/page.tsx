@@ -8,6 +8,8 @@ import {
   Bookmark, ArrowLeft, Loader2, MapPin,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { useSubscription } from "@/hooks/useSubscription";
+import TierGate from "@/components/TierGate";
 
 type Project = {
   id: string;
@@ -47,16 +49,20 @@ export default function AnalyticsPage() {
   const router = useRouter();
   const params = useParams();
   const supabase = useMemo(() => createClient(), []);
+  const { features } = useSubscription();
   const [project, setProject] = useState<Project | null>(null);
   const [views, setViews] = useState<ViewRecord[]>([]);
   const [bookmarkCount, setBookmarkCount] = useState(0);
   const [chatCount, setChatCount] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [profile, setProfile] = useState<{
+  type Profile = {
     full_name: string;
     username: string;
     role: string;
-  } | null>(null);
+    subscription_tier?: string;
+  };
+
+  const [profile, setProfile] = useState<Profile | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -65,7 +71,7 @@ export default function AnalyticsPage() {
 
     const { data: prof } = await supabase
       .from("profiles")
-      .select("full_name, username, role")
+      .select("full_name, username, role, subscription_tier")
       .eq("id", user.id)
       .single();
     if (prof) setProfile(prof);
@@ -177,144 +183,153 @@ export default function AnalyticsPage() {
           </div>
         </div>
 
-        {/* Key metrics */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-xl p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Eye size={15} className="text-[#C9A84C]" />
-              <span className="text-[#5C5A70] text-xs">Total views</span>
-            </div>
-            <div className="text-[#F5F3ED] text-2xl font-medium">
-              {project.view_count || views.length}
-            </div>
-            <div className="text-[#5C5A70] text-xs mt-1">
-              {views.filter((v) => {
-                const d = new Date(v.viewed_at);
-                const now = new Date();
-                return now.getTime() - d.getTime() < 7 * 24 * 60 * 60 * 1000;
-              }).length} this week
-            </div>
-          </div>
-          <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-xl p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Bookmark size={15} className="text-[#C9A84C]" />
-              <span className="text-[#5C5A70] text-xs">Bookmarks</span>
-            </div>
-            <div className="text-[#F5F3ED] text-2xl font-medium">{bookmarkCount}</div>
-            <div className="text-[#5C5A70] text-xs mt-1">Saved by investors</div>
-          </div>
-          <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-xl p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <MessageCircle size={15} className="text-[#C9A84C]" />
-              <span className="text-[#5C5A70] text-xs">Conversations</span>
-            </div>
-            <div className="text-[#F5F3ED] text-2xl font-medium">{chatCount}</div>
-            <div className="text-[#5C5A70] text-xs mt-1">Investors reached out</div>
-          </div>
-          <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-xl p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <TrendingUp size={15} className="text-[#C9A84C]" />
-              <span className="text-[#5C5A70] text-xs">Raised</span>
-            </div>
-            <div className="text-[#F5F3ED] text-2xl font-medium">{raisedPct}%</div>
-            <div className="text-[#5C5A70] text-xs mt-1">
-              {formatCurrency(project.amount_raised)} of {formatCurrency(project.funding_goal)}
-            </div>
-          </div>
-        </div>
-
-        {/* Funding progress */}
-        <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-xl p-4">
-          <h2 className="text-[#F5F3ED] text-sm font-medium mb-3">Funding progress</h2>
-          <div className="h-3 bg-[#2A2A3E] rounded-full overflow-hidden mb-2">
-            <div
-              className="h-full bg-[#C9A84C] rounded-full transition-all"
-              style={{ width: `${raisedPct}%` }}
-            />
-          </div>
-          <div className="flex justify-between text-xs text-[#5C5A70]">
-            <span>{formatCurrency(project.amount_raised)} raised</span>
-            <span>{formatCurrency(project.funding_goal)} goal</span>
-          </div>
-        </div>
-
-        {/* Views over time */}
-        <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-xl p-4">
-          <h2 className="text-[#F5F3ED] text-sm font-medium mb-4">Views — last 7 days</h2>
-          <div className="flex items-end gap-2 h-24">
-            {last7Days.map((day) => {
-              const count = viewsByDay[day] || 0;
-              const heightPct = maxDayViews > 0 ? (count / maxDayViews) * 100 : 0;
-              return (
-                <div key={day} className="flex-1 flex flex-col items-center gap-1">
-                  <div className="w-full flex items-end justify-center" style={{ height: "80px" }}>
-                    <div
-                      className="w-full bg-[#C9A84C] rounded-t-sm transition-all"
-                      style={{ height: `${Math.max(heightPct, count > 0 ? 10 : 0)}%` }}
-                    />
-                  </div>
-                  <span className="text-[#5C5A70] text-xs">{day.split(" ")[1]}</span>
+        <TierGate
+          requiredTier="pro"
+          currentTier={(profile as any)?.subscription_tier || features.tier || "free"}
+          featureName="Analytics Dashboard"
+          featureDesc="See who viewed your pitch, which countries they're from, and track investor interest over time. Upgrade to Pro to unlock full analytics."
+        >
+          <div className="flex flex-col gap-4">
+            {/* Key metrics */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Eye size={15} className="text-[#C9A84C]" />
+                  <span className="text-[#5C5A70] text-xs">Total views</span>
                 </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Views by country */}
-        {topCountries.length > 0 && (
-          <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-xl p-4">
-            <h2 className="text-[#F5F3ED] text-sm font-medium mb-3">Views by region</h2>
-            <div className="flex flex-col gap-3">
-              {topCountries.map(([country, count]) => (
-                <div key={country} className="flex items-center gap-3">
-                  <div className="flex items-center gap-1.5 w-28 shrink-0">
-                    <MapPin size={11} className="text-[#5C5A70]" />
-                    <span className="text-[#A8A6B8] text-xs truncate">{country}</span>
-                  </div>
-                  <div className="flex-1 h-2 bg-[#2A2A3E] rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-[#C9A84C] rounded-full"
-                      style={{ width: `${(count / maxCountryViews) * 100}%` }}
-                    />
-                  </div>
-                  <span className="text-[#F5F3ED] text-xs font-medium w-6 text-right">{count}</span>
+                <div className="text-[#F5F3ED] text-2xl font-medium">
+                  {project.view_count || views.length}
                 </div>
-              ))}
+                <div className="text-[#5C5A70] text-xs mt-1">
+                  {views.filter((v) => {
+                    const d = new Date(v.viewed_at);
+                    const now = new Date();
+                    return now.getTime() - d.getTime() < 7 * 24 * 60 * 60 * 1000;
+                  }).length} this week
+                </div>
+              </div>
+              <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Bookmark size={15} className="text-[#C9A84C]" />
+                  <span className="text-[#5C5A70] text-xs">Bookmarks</span>
+                </div>
+                <div className="text-[#F5F3ED] text-2xl font-medium">{bookmarkCount}</div>
+                <div className="text-[#5C5A70] text-xs mt-1">Saved by investors</div>
+              </div>
+              <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <MessageCircle size={15} className="text-[#C9A84C]" />
+                  <span className="text-[#5C5A70] text-xs">Conversations</span>
+                </div>
+                <div className="text-[#F5F3ED] text-2xl font-medium">{chatCount}</div>
+                <div className="text-[#5C5A70] text-xs mt-1">Investors reached out</div>
+              </div>
+              <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <TrendingUp size={15} className="text-[#C9A84C]" />
+                  <span className="text-[#5C5A70] text-xs">Raised</span>
+                </div>
+                <div className="text-[#F5F3ED] text-2xl font-medium">{raisedPct}%</div>
+                <div className="text-[#5C5A70] text-xs mt-1">
+                  {formatCurrency(project.amount_raised)} of {formatCurrency(project.funding_goal)}
+                </div>
+              </div>
             </div>
-          </div>
-        )}
 
-        {/* Recent viewers */}
-        {views.length > 0 && (
-          <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-xl p-4">
-            <h2 className="text-[#F5F3ED] text-sm font-medium mb-3">
-              Recent viewers
-            </h2>
-            <div className="flex flex-col gap-2">
-              {views.slice(0, 10).map((v) => (
-                <div key={v.id} className="flex items-center gap-3 py-2 border-b border-[#3A3A52] last:border-0">
-                  <div className="w-7 h-7 rounded-full bg-[#C9A84C20] flex items-center justify-center text-xs font-medium text-[#C9A84C] shrink-0">
-                    {v.profiles?.full_name?.[0] || "?"}
-                  </div>
-                  <div className="flex-1">
-                    <div className="text-[#F5F3ED] text-xs font-medium">
-                      {v.profiles?.full_name || "Anonymous"}
+            {/* Funding progress */}
+            <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-xl p-4">
+              <h2 className="text-[#F5F3ED] text-sm font-medium mb-3">Funding progress</h2>
+              <div className="h-3 bg-[#2A2A3E] rounded-full overflow-hidden mb-2">
+                <div
+                  className="h-full bg-[#C9A84C] rounded-full transition-all"
+                  style={{ width: `${raisedPct}%` }}
+                />
+              </div>
+              <div className="flex justify-between text-xs text-[#5C5A70]">
+                <span>{formatCurrency(project.amount_raised)} raised</span>
+                <span>{formatCurrency(project.funding_goal)} goal</span>
+              </div>
+            </div>
+
+            {/* Views over time */}
+            <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-xl p-4">
+              <h2 className="text-[#F5F3ED] text-sm font-medium mb-4">Views — last 7 days</h2>
+              <div className="flex items-end gap-2 h-24">
+                {last7Days.map((day) => {
+                  const count = viewsByDay[day] || 0;
+                  const heightPct = maxDayViews > 0 ? (count / maxDayViews) * 100 : 0;
+                  return (
+                    <div key={day} className="flex-1 flex flex-col items-center gap-1">
+                      <div className="w-full flex items-end justify-center" style={{ height: "80px" }}>
+                        <div
+                          className="w-full bg-[#C9A84C] rounded-t-sm transition-all"
+                          style={{ height: `${Math.max(heightPct, count > 0 ? 10 : 0)}%` }}
+                        />
+                      </div>
+                      <span className="text-[#5C5A70] text-xs">{day.split(" ")[1]}</span>
                     </div>
-                    <div className="text-[#5C5A70] text-xs capitalize">
-                      {v.profiles?.role || "User"}
-                      {v.profiles?.country ? ` · ${v.profiles.country}` : ""}
-                    </div>
-                  </div>
-                  <div className="text-[#5C5A70] text-xs">
-                    {new Date(v.viewed_at).toLocaleDateString("en-US", {
-                      month: "short", day: "numeric",
-                    })}
-                  </div>
-                </div>
-              ))}
+                  );
+                })}
+              </div>
             </div>
+
+            {/* Views by country */}
+            {topCountries.length > 0 && (
+              <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-xl p-4">
+                <h2 className="text-[#F5F3ED] text-sm font-medium mb-3">Views by region</h2>
+                <div className="flex flex-col gap-3">
+                  {topCountries.map(([country, count]) => (
+                    <div key={country} className="flex items-center gap-3">
+                      <div className="flex items-center gap-1.5 w-28 shrink-0">
+                        <MapPin size={11} className="text-[#5C5A70]" />
+                        <span className="text-[#A8A6B8] text-xs truncate">{country}</span>
+                      </div>
+                      <div className="flex-1 h-2 bg-[#2A2A3E] rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-[#C9A84C] rounded-full"
+                          style={{ width: `${(count / maxCountryViews) * 100}%` }}
+                        />
+                      </div>
+                      <span className="text-[#F5F3ED] text-xs font-medium w-6 text-right">{count}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Recent viewers */}
+            {views.length > 0 && (
+              <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-xl p-4">
+                <h2 className="text-[#F5F3ED] text-sm font-medium mb-3">
+                  Recent viewers
+                </h2>
+                <div className="flex flex-col gap-2">
+                  {views.slice(0, 10).map((v) => (
+                    <div key={v.id} className="flex items-center gap-3 py-2 border-b border-[#3A3A52] last:border-0">
+                      <div className="w-7 h-7 rounded-full bg-[#C9A84C20] flex items-center justify-center text-xs font-medium text-[#C9A84C] shrink-0">
+                        {v.profiles?.full_name?.[0] || "?"}
+                      </div>
+                      <div className="flex-1">
+                        <div className="text-[#F5F3ED] text-xs font-medium">
+                          {v.profiles?.full_name || "Anonymous"}
+                        </div>
+                        <div className="text-[#5C5A70] text-xs capitalize">
+                          {v.profiles?.role || "User"}
+                          {v.profiles?.country ? ` · ${v.profiles.country}` : ""}
+                        </div>
+                      </div>
+                      <div className="text-[#5C5A70] text-xs">
+                        {new Date(v.viewed_at).toLocaleDateString("en-US", {
+                          month: "short", day: "numeric",
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-        )}
+        </TierGate>
       </div>
     </DashboardShell>
   );

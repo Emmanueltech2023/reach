@@ -25,11 +25,11 @@ export async function POST(req: NextRequest) {
 
     // 3. Fetch data in parallel
     const [profileRes, authRes] = await Promise.all([
-      supabase.from("profiles").select("full_name").eq("id", userId).single(),
+      supabase.from("profiles").select("full_name, role").eq("id", userId).single(),
       supabase.auth.admin.getUserById(userId)
     ]);
 
-    const { full_name } = profileRes.data || {};
+    const { full_name, role } = profileRes.data || {};
     const email = authRes.data.user?.email;
 
     // 4. Atomic Database Updates
@@ -44,13 +44,15 @@ export async function POST(req: NextRequest) {
 
     if (updateError) throw updateError;
 
+    const dashUrl = role === "builder" ? "/dashboard/builder" : role === "talent" ? "/dashboard/talent" : "/dashboard/investor";
+
     // 5. Secondary tasks: Fire-and-forget (do not await critical path)
     const notification = supabase.from("notifications").insert({
       user_id: userId,
       title: action === "approve" ? "KYC Approved ✓" : "KYC Rejected",
       body: action === "approve" ? "You have full access to iVest." : "Please resubmit documents.",
       type: "kyc",
-      action_url: action === "approve" ? "/dashboard/investor" : "/auth/kyc",
+      action_url: action === "approve" ? dashUrl : "/auth/kyc",
     });
 
     const trustEvent = action === "approve" 
@@ -58,11 +60,12 @@ export async function POST(req: NextRequest) {
       : Promise.resolve();
 
     // Wrap email in a non-blocking catch so it never fails the request
-    const emailTask = (email && full_name) 
+    const userName = full_name || "User";
+    const emailTask = email 
       ? sendEmail({
           to: email,
           subject: action === "approve" ? "✓ Your iVest identity is verified" : "iVest — KYC update",
-          html: action === "approve" ? emailTemplates.kycApproved(full_name) : emailTemplates.kycRejected(full_name),
+          html: action === "approve" ? emailTemplates.kycApproved(userName, role || "investor") : emailTemplates.kycRejected(userName),
         }).catch(err => console.error("Email failed:", err))
       : Promise.resolve();
 

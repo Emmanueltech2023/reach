@@ -12,6 +12,7 @@ import {
   ArrowRight, Info, X, Save,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import TierGate from "@/components/TierGate";
 
 type Deal = {
   id: string;
@@ -118,6 +119,7 @@ export default function DealsPage() {
     full_name: string;
     username: string;
     role: string;
+    subscription_tier?: string;
   } | null>(null);
   const [activeStage, setActiveStage] = useState("all");
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
@@ -142,7 +144,7 @@ export default function DealsPage() {
 
     const { data: prof } = await supabase
       .from("profiles")
-      .select("id, full_name, username, role")
+      .select("id, full_name, username, role, subscription_tier")
       .eq("id", user.id)
       .single();
     if (prof) setProfile(prof);
@@ -151,7 +153,6 @@ export default function DealsPage() {
     const { deals: data } = await res.json();
     setDeals(data || []);
 
-    // For investors — get all projects to initiate deals
     const { data: projects } = await supabase
       .from("projects")
       .select("id, name")
@@ -268,7 +269,7 @@ export default function DealsPage() {
 
     return (
       <DashboardShell
-        role={profile?.role as "investor" | "builder" || "investor"}
+        role={profile?.role}
         fullName={profile?.full_name}
         username={profile?.username}
       >
@@ -453,7 +454,6 @@ export default function DealsPage() {
 
                 return (
                   <div key={s.id} className="flex gap-4">
-                    {/* Line + dot */}
                     <div className="flex flex-col items-center">
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 border-2 transition ${
                         isDone
@@ -473,7 +473,6 @@ export default function DealsPage() {
                       )}
                     </div>
 
-                    {/* Content */}
                     <div className="flex-1 pb-6">
                       <div className="flex items-center justify-between">
                         <div>
@@ -558,7 +557,6 @@ export default function DealsPage() {
               </button>
             </div>
 
-            {/* Timeline info */}
             <div className="flex items-center justify-between text-xs text-[#5C5A70]">
               <div className="flex items-center gap-1">
                 <Calendar size={12} />
@@ -579,268 +577,278 @@ export default function DealsPage() {
 
   return (
     <DashboardShell
-      role={profile?.role as "investor" | "builder" || "investor"}
+      role={profile?.role}
       fullName={profile?.full_name}
       username={profile?.username}
     >
-      <div className="max-w-3xl mx-auto flex flex-col gap-5">
-
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-[#F5F3ED] text-lg font-medium">Deal pipeline</h1>
-            <p className="text-[#5C5A70] text-xs mt-0.5">
-              Track and manage your investment deals
-            </p>
-          </div>
-          {profile?.role === "investor" && (
-            <button
-              onClick={() => setShowNewDeal(true)}
-              className="flex items-center gap-2 bg-[#C9A84C] text-[#1A1A2E] text-sm font-medium px-4 py-2 rounded-lg hover:opacity-90 transition"
-            >
-              <Plus size={15} />
-              New deal
-            </button>
-          )}
-        </div>
-
-        {/* Summary cards */}
-        {deals.length > 0 && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-xl p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <Users size={14} className="text-[#C9A84C]" />
-                <span className="text-[#5C5A70] text-xs">Total deals</span>
-              </div>
-              <div className="text-[#F5F3ED] text-xl font-medium">{deals.length}</div>
-            </div>
-            <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-xl p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <TrendingUp size={14} className="text-blue-400" />
-                <span className="text-[#5C5A70] text-xs">Pipeline value</span>
-              </div>
-              <div className="text-[#F5F3ED] text-xl font-medium">{formatCurrency(totalPipeline)}</div>
-            </div>
-            <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-xl p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <Trophy size={14} className="text-emerald-400" />
-                <span className="text-[#5C5A70] text-xs">Closed</span>
-              </div>
-              <div className="text-[#F5F3ED] text-xl font-medium">{formatCurrency(totalClosed)}</div>
-            </div>
-            <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-xl p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <DollarSign size={14} className="text-[#C9A84C]" />
-                <span className="text-[#5C5A70] text-xs">iVest fees due</span>
-              </div>
-              <div className="text-[#F5F3ED] text-xl font-medium">
-                {formatCurrency(
-                  deals
-                    .filter((d) => d.stage === "closed")
-                    .reduce((sum, d) => sum + ((d.amount * d.commission_rate) / 100), 0)
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Stage filters */}
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          <button
-            onClick={() => setActiveStage("all")}
-            className={`shrink-0 text-xs px-3 py-1.5 rounded-full border transition ${
-              activeStage === "all"
-                ? "bg-[#C9A84C] text-[#1A1A2E] border-[#C9A84C] font-medium"
-                : "border-[#3A3A52] text-[#A8A6B8] hover:border-[#5C5A70]"
-            }`}
+      {profile && !["pro", "premium"].includes(profile.subscription_tier || "free") ? (
+        <div className="max-w-3xl mx-auto">
+          <TierGate
+            requiredTier="pro"
+            currentTier={profile.subscription_tier || "free"}
+            featureName="Deal Pipeline"
+            featureDesc="Track investment deals from NDA to close. Manage term sheets, agreements, and commission tracking. Upgrade to Pro to access your deal pipeline."
           >
-            All ({deals.length})
-          </button>
-          {STAGES.map((s) => {
-            const count = stageCount(s.id);
-            return (
-              <button
-                key={s.id}
-                onClick={() => setActiveStage(s.id)}
-                className={`shrink-0 flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border transition ${
-                  activeStage === s.id
-                    ? `${s.bg} ${s.color} ${s.border} font-medium`
-                    : "border-[#3A3A52] text-[#A8A6B8] hover:border-[#5C5A70]"
-                }`}
-              >
-                <div className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
-                {s.shortLabel} ({count})
-              </button>
-            );
-          })}
+            <div />
+          </TierGate>
         </div>
+      ) : (
+        <div className="max-w-3xl mx-auto flex flex-col gap-5">
 
-        {/* Deals list */}
-        {loading ? (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 size={22} className="text-[#C9A84C] animate-spin" />
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 gap-4 border border-dashed border-[#3A3A52] rounded-xl">
-            <div className="w-14 h-14 rounded-full bg-[#1A1A2E] flex items-center justify-center">
-              <Handshake size={24} className="text-[#3A3A52]" />
-            </div>
-            <div className="text-center">
-              <p className="text-[#F5F3ED] text-sm font-medium mb-1">No deals yet</p>
-              <p className="text-[#5C5A70] text-xs max-w-xs leading-relaxed">
-                Initiate deals directly from project pages or from chats using the NDA button.
-                Deals track your investment discussions from NDA to close.
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-[#F5F3ED] text-lg font-medium">Deal pipeline</h1>
+              <p className="text-[#5C5A70] text-xs mt-0.5">
+                Track and manage your investment deals
               </p>
             </div>
-            <div className="flex gap-2">
+            {profile?.role === "investor" && (
               <button
-                onClick={() => router.push("/dashboard/investor")}
-                className="flex items-center gap-1.5 border border-[#3A3A52] text-[#A8A6B8] text-xs px-3 py-2 rounded-lg hover:border-[#5C5A70] transition"
+                onClick={() => setShowNewDeal(true)}
+                className="flex items-center gap-2 bg-[#C9A84C] text-[#1A1A2E] text-sm font-medium px-4 py-2 rounded-lg hover:opacity-90 transition"
               >
-                Browse projects
+                <Plus size={15} />
+                New deal
               </button>
-              {profile?.role === "investor" && (
-                <button
-                  onClick={() => setShowNewDeal(true)}
-                  className="flex items-center gap-1.5 bg-[#C9A84C] text-[#1A1A2E] text-xs font-medium px-3 py-2 rounded-lg hover:opacity-90 transition"
-                >
-                  <Plus size={13} />
-                  New deal
-                </button>
-              )}
-            </div>
+            )}
           </div>
-        ) : (
-          <div className="flex flex-col gap-3">
-            {filtered.map((deal) => {
-              const stage = STAGES.find((s) => s.id === deal.stage);
-              const isClosed = deal.stage === "closed";
-              const isInvestor = deal.investor_id === profile?.id;
-              const currentIndex = STAGE_ORDER.indexOf(deal.stage);
-              const commission = deal.amount
-                ? (deal.amount * deal.commission_rate) / 100
-                : 0;
 
-              return (
-                <div
-                  key={deal.id}
-                  onClick={() => setSelectedDeal(deal)}
-                  className="bg-[#1A1A2E] border border-[#3A3A52] rounded-xl p-4 hover:border-[#5C5A70] transition cursor-pointer group"
-                >
-                  <div className="flex items-start gap-3 mb-4">
-                    {/* Logo */}
-                    {deal.projects?.logo_url ? (
-                      <div className="relative w-10 h-10 rounded-lg overflow-hidden">
-                        <Image
-                          src={deal.projects.logo_url}
-                          fill
-                          alt={`${deal.projects.name} logo`}
-                          className="object-cover rounded-lg"
-                        />
-                      </div>
-                    ) : (
-                      <div className="w-10 h-10 rounded-lg bg-[#C9A84C20] flex items-center justify-center">
-                        <span className="text-sm font-medium text-[#C9A84C]">
-                          {deal.projects?.name?.[0] || "?"}
-                        </span>
-                      </div>
-                    )}
-
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <div className="text-[#F5F3ED] text-sm font-medium truncate">
-                            {deal.projects?.name || deal.title}
-                          </div>
-                          <div className="text-[#5C5A70] text-xs mt-0.5">
-                            {isInvestor ? "You → Founder" : "Investor → You"} · {timeAgo(deal.created_at)}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${stage?.bg} ${stage?.color} ${stage?.border}`}>
-                            {stage?.label}
-                          </span>
-                          <ChevronRight size={15} className="text-[#3A3A52] group-hover:text-[#A8A6B8] transition" />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Progress bar */}
-                  <div className="flex items-center gap-1 mb-3">
-                    {STAGE_ORDER.map((s, i) => (
-                      <div
-                        key={s}
-                        className={`flex-1 h-1.5 rounded-full transition-all ${
-                          i <= currentIndex
-                            ? isClosed ? "bg-emerald-500" : "bg-[#C9A84C]"
-                            : "bg-[#2A2A3E]"
-                        }`}
-                      />
-                    ))}
-                  </div>
-
-                  {/* Deal metrics */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      {deal.amount > 0 && (
-                        <div>
-                          <div className="text-[#F5F3ED] text-sm font-medium">
-                            {formatCurrency(deal.amount)}
-                          </div>
-                          <div className="text-[#5C5A70] text-xs">Deal size</div>
-                        </div>
-                      )}
-                      {isClosed && commission > 0 && (
-                        <div>
-                          <div className="text-[#C9A84C] text-sm font-medium">
-                            {formatCurrency(commission)}
-                          </div>
-                          <div className="text-[#5C5A70] text-xs">Fee due</div>
-                        </div>
-                      )}
-                      {deal.projects?.sector && (
-                        <div className="hidden md:block">
-                          <div className="text-[#A8A6B8] text-xs">{deal.projects.sector}</div>
-                          <div className="text-[#5C5A70] text-xs">{deal.projects?.category?.toUpperCase()}</div>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      {!isClosed && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            advanceStage(deal.id, deal.stage);
-                          }}
-                          disabled={advancingDeal === deal.id}
-                          className="flex items-center gap-1 text-xs text-[#C9A84C] border border-[#C9A84C30] px-2.5 py-1.5 rounded-lg hover:bg-[#C9A84C10] transition"
-                        >
-                          {advancingDeal === deal.id ? (
-                            <Loader2 size={11} className="animate-spin" />
-                          ) : (
-                            <>
-                              Next stage
-                              <ArrowRight size={11} />
-                            </>
-                          )}
-                        </button>
-                      )}
-                      {isClosed && (
-                        <div className="flex items-center gap-1 text-xs text-emerald-400">
-                          <Trophy size={12} />
-                          Closed
-                        </div>
-                      )}
-                    </div>
-                  </div>
+          {/* Summary cards */}
+          {deals.length > 0 && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Users size={14} className="text-[#C9A84C]" />
+                  <span className="text-[#5C5A70] text-xs">Total deals</span>
                 </div>
+                <div className="text-[#F5F3ED] text-xl font-medium">{deals.length}</div>
+              </div>
+              <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <TrendingUp size={14} className="text-blue-400" />
+                  <span className="text-[#5C5A70] text-xs">Pipeline value</span>
+                </div>
+                <div className="text-[#F5F3ED] text-xl font-medium">{formatCurrency(totalPipeline)}</div>
+              </div>
+              <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Trophy size={14} className="text-emerald-400" />
+                  <span className="text-[#5C5A70] text-xs">Closed</span>
+                </div>
+                <div className="text-[#F5F3ED] text-xl font-medium">{formatCurrency(totalClosed)}</div>
+              </div>
+              <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <DollarSign size={14} className="text-[#C9A84C]" />
+                  <span className="text-[#5C5A70] text-xs">iVest fees due</span>
+                </div>
+                <div className="text-[#F5F3ED] text-xl font-medium">
+                  {formatCurrency(
+                    deals
+                      .filter((d) => d.stage === "closed")
+                      .reduce((sum, d) => sum + ((d.amount * d.commission_rate) / 100), 0)
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Stage filters */}
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            <button
+              onClick={() => setActiveStage("all")}
+              className={`shrink-0 text-xs px-3 py-1.5 rounded-full border transition ${
+                activeStage === "all"
+                  ? "bg-[#C9A84C] text-[#1A1A2E] border-[#C9A84C] font-medium"
+                  : "border-[#3A3A52] text-[#A8A6B8] hover:border-[#5C5A70]"
+              }`}
+            >
+              All ({deals.length})
+            </button>
+            {STAGES.map((s) => {
+              const count = stageCount(s.id);
+              return (
+                <button
+                  key={s.id}
+                  onClick={() => setActiveStage(s.id)}
+                  className={`shrink-0 flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border transition ${
+                    activeStage === s.id
+                      ? `${s.bg} ${s.color} ${s.border} font-medium`
+                      : "border-[#3A3A52] text-[#A8A6B8] hover:border-[#5C5A70]"
+                  }`}
+                >
+                  <div className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
+                  {s.shortLabel} ({count})
+                </button>
               );
             })}
           </div>
-        )}
-      </div>
+
+          {/* Deals list */}
+          {loading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 size={22} className="text-[#C9A84C] animate-spin" />
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 gap-4 border border-dashed border-[#3A3A52] rounded-xl">
+              <div className="w-14 h-14 rounded-full bg-[#1A1A2E] flex items-center justify-center">
+                <Handshake size={24} className="text-[#3A3A52]" />
+              </div>
+              <div className="text-center">
+                <p className="text-[#F5F3ED] text-sm font-medium mb-1">No deals yet</p>
+                <p className="text-[#5C5A70] text-xs max-w-xs leading-relaxed">
+                  Initiate deals directly from project pages or from chats using the NDA button.
+                  Deals track your investment discussions from NDA to close.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => router.push("/dashboard/investor")}
+                  className="flex items-center gap-1.5 border border-[#3A3A52] text-[#A8A6B8] text-xs px-3 py-2 rounded-lg hover:border-[#5C5A70] transition"
+                >
+                  Browse projects
+                </button>
+                {profile?.role === "investor" && (
+                  <button
+                    onClick={() => setShowNewDeal(true)}
+                    className="flex items-center gap-1.5 bg-[#C9A84C] text-[#1A1A2E] text-xs font-medium px-3 py-2 rounded-lg hover:opacity-90 transition"
+                  >
+                    <Plus size={13} />
+                    New deal
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {filtered.map((deal) => {
+                const stage = STAGES.find((s) => s.id === deal.stage);
+                const isClosed = deal.stage === "closed";
+                const isInvestor = deal.investor_id === profile?.id;
+                const currentIndex = STAGE_ORDER.indexOf(deal.stage);
+                const commission = deal.amount
+                  ? (deal.amount * deal.commission_rate) / 100
+                  : 0;
+
+                return (
+                  <div
+                    key={deal.id}
+                    onClick={() => setSelectedDeal(deal)}
+                    className="bg-[#1A1A2E] border border-[#3A3A52] rounded-xl p-4 hover:border-[#5C5A70] transition cursor-pointer group"
+                  >
+                    <div className="flex items-start gap-3 mb-4">
+                      {deal.projects?.logo_url ? (
+                        <div className="relative w-10 h-10 rounded-lg overflow-hidden">
+                          <Image
+                            src={deal.projects.logo_url}
+                            fill
+                            alt={`${deal.projects.name} logo`}
+                            className="object-cover rounded-lg"
+                          />
+                        </div>
+                      ) : (
+                        <div className="w-10 h-10 rounded-lg bg-[#C9A84C20] flex items-center justify-center">
+                          <span className="text-sm font-medium text-[#C9A84C]">
+                            {deal.projects?.name?.[0] || "?"}
+                          </span>
+                        </div>
+                      )}
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <div className="text-[#F5F3ED] text-sm font-medium truncate">
+                              {deal.projects?.name || deal.title}
+                            </div>
+                            <div className="text-[#5C5A70] text-xs mt-0.5">
+                              {isInvestor ? "You → Founder" : "Investor → You"} · {timeAgo(deal.created_at)}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${stage?.bg} ${stage?.color} ${stage?.border}`}>
+                              {stage?.label}
+                            </span>
+                            <ChevronRight size={15} className="text-[#3A3A52] group-hover:text-[#A8A6B8] transition" />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1 mb-3">
+                      {STAGE_ORDER.map((s, i) => (
+                        <div
+                          key={s}
+                          className={`flex-1 h-1.5 rounded-full transition-all ${
+                            i <= currentIndex
+                              ? isClosed ? "bg-emerald-500" : "bg-[#C9A84C]"
+                              : "bg-[#2A2A3E]"
+                          }`}
+                        />
+                      ))}
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        {deal.amount > 0 && (
+                          <div>
+                            <div className="text-[#F5F3ED] text-sm font-medium">
+                              {formatCurrency(deal.amount)}
+                            </div>
+                            <div className="text-[#5C5A70] text-xs">Deal size</div>
+                          </div>
+                        )}
+                        {isClosed && commission > 0 && (
+                          <div>
+                            <div className="text-[#C9A84C] text-sm font-medium">
+                              {formatCurrency(commission)}
+                            </div>
+                            <div className="text-[#5C5A70] text-xs">Fee due</div>
+                          </div>
+                        )}
+                        {deal.projects?.sector && (
+                          <div className="hidden md:block">
+                            <div className="text-[#A8A6B8] text-xs">{deal.projects.sector}</div>
+                            <div className="text-[#5C5A70] text-xs">{deal.projects?.category?.toUpperCase()}</div>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {!isClosed && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              advanceStage(deal.id, deal.stage);
+                            }}
+                            disabled={advancingDeal === deal.id}
+                            className="flex items-center gap-1 text-xs text-[#C9A84C] border border-[#C9A84C30] px-2.5 py-1.5 rounded-lg hover:bg-[#C9A84C10] transition"
+                          >
+                            {advancingDeal === deal.id ? (
+                              <Loader2 size={11} className="animate-spin" />
+                            ) : (
+                              <>
+                                Next stage
+                                <ArrowRight size={11} />
+                              </>
+                            )}
+                          </button>
+                        )}
+                        {isClosed && (
+                          <div className="flex items-center gap-1 text-xs text-emerald-400">
+                            <Trophy size={12} />
+                            Closed
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* New deal modal */}
       {showNewDeal && (

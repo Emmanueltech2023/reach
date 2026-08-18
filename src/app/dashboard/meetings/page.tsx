@@ -136,7 +136,7 @@ export default function MeetingsPage() {
 
   return (
     <DashboardShell
-      role={profile?.role as "investor" | "builder" || "investor"}
+      role={profile?.role}
       fullName={profile?.full_name}
       username={profile?.username}
     >

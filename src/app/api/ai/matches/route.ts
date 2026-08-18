@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
+import { getUserTier, tierCanDo } from "@/lib/tierCheck";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -26,6 +27,20 @@ export async function GET(req: NextRequest) {
 
     if (!investorId) {
       return NextResponse.json({ error: "Missing investorId" }, { status: 400 });
+    }
+
+    // 2. Add Tier Enforcement Check
+    const tier = await getUserTier(investorId);
+    if (!tierCanDo(tier, "canAccessAIMatches")) {
+      return NextResponse.json(
+        {
+          error: "AI Match Engine requires a Pro or Premium plan.",
+          upgradeRequired: true,
+          requiredTier: "pro",
+          matches: [],
+        },
+        { status: 403 }
+      );
     }
 
     // Get investor profile

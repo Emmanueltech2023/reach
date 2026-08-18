@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
+import { getUserTier, getTierRules } from "@/lib/tierCheck";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -46,6 +47,26 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Check tier limit for team members
+    const tier = await getUserTier(invitedBy);
+    const rules = getTierRules(tier);
+
+    const { count: memberCount } = await supabase
+      .from("team_members")
+      .select("*", { count: "exact", head: true })
+      .eq("project_id", projectId);
+
+    if (rules.maxTeamMembers !== -1 && (memberCount || 0) >= rules.maxTeamMembers) {
+      return NextResponse.json(
+        {
+          error: `Your ${tier} plan allows up to ${rules.maxTeamMembers} team members. Upgrade to Pro for up to 10 members.`,
+          upgradeRequired: true,
+          requiredTier: "pro",
+        },
+        { status: 403 }
+      );
+    }
+
     // Add team member
     const { error: insertError } = await supabase
       .from("team_members")
@@ -63,6 +84,30 @@ export async function POST(req: NextRequest) {
         { status: 500 }
       );
     }
+
+    // Create in-app notification & send email to target user
+    const { data: inviterProfile } = await supabase
+      .from("profiles")
+      .select("full_name")
+      .eq("id", invitedBy)
+      .single();
+
+    const { data: project } = await supabase
+      .from("projects")
+      .select("name")
+      .eq("id", projectId)
+      .single();
+
+    const inviterName = inviterProfile?.full_name || "A team founder";
+    const projectName = project?.name || "their startup";
+
+    await supabase.from("notifications").insert({
+      user_id: targetUser.id,
+      title: "Team invitation",
+      body: `${inviterName} added you to the ${projectName} team as ${role}.`,
+      type: "general",
+      action_url: "/dashboard/chats",
+    });
 
     return NextResponse.json({
       success: true,

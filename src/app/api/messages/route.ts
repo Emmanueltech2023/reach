@@ -1,6 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { sendEmail, emailTemplates } from "@/lib/email";
+import { getUserTier, getTierRules } from "@/lib/tierCheck";
+import { moderateContent } from "./moderate/route";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -60,6 +62,63 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // 2. Add Tier Enforcement Check (After getting senderId)
+    const tier = await getUserTier(senderId);
+    const rules = getTierRules(tier);
+
+    if (rules.maxMessages !== null) {
+      // Rolling 30-day window for monthly free limit reset
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+      const { count, error: countError } = await supabase
+        .from("messages")
+        .select("*", { count: "exact", head: true })
+        .eq("sender_id", senderId)
+        .gte("created_at", thirtyDaysAgo.toISOString());
+
+      if (countError) throw countError;
+
+      if ((count || 0) >= rules.maxMessages) {
+        return NextResponse.json(
+          {
+            error: "You have reached your 10 monthly messages on the free plan. Limits refresh automatically each month, or upgrade to Pro for unlimited messaging.",
+            upgradeRequired: true,
+            requiredTier: "pro",
+          },
+          { status: 403 }
+        );
+      }
+    }
+
+      // Run moderation on text messages only
+      if (messageType === "text" && content) {
+        const modData = moderateContent(content);
+
+        if (modData.flagged && !modData.warningOnly) {
+          // Hard block — don't save
+          return NextResponse.json(
+            {
+              error: modData.reason,
+              moderated: true,
+              warningOnly: false,
+            },
+            { status: 422 }
+          );
+        }
+
+        // Log warning-only flags to DB for admin review
+        if (modData.flagged && modData.warningOnly) {
+          await supabase.from("notifications").insert({
+            user_id: senderId,
+            title: "Platform policy reminder",
+            body: modData.reason,
+            type: "general",
+          });
+        }
+      }
+
+    // 3. Proceed with Insertion
     const { data, error } = await supabase
       .from("messages")
       .insert({
@@ -67,8 +126,8 @@ export async function POST(req: NextRequest) {
         sender_id: senderId,
         content,
         message_type: messageType,
-        delivery_status: "sent", // Modified: Matches our new WhatsApp tracking schema
-        deal_id: dealId,         // Added: Supports interactive NDA & Deal structures
+        delivery_status: "sent",
+        deal_id: dealId,
       })
       .select(`
         *,
@@ -107,18 +166,29 @@ export async function POST(req: NextRequest) {
           .eq("id", senderId)
           .single();
 
-        if (authUser?.user?.email && recipientProfile?.full_name) {
-          if (messageType === "text") {
-            sendEmail({
-              to: authUser.user.email,
-              subject: `New message from ${senderProfile?.full_name || "Someone"} — iVest`,
-              html: emailTemplates.newMessage(
-                recipientProfile.full_name,
-                senderProfile?.full_name || "Someone",
-                content.slice(0, 100) + (content.length > 100 ? "…" : "")
-              ),
-            }).catch((err) => console.error("Failed to send notification email:", err));
-          }
+        const senderName = senderProfile?.full_name || "Someone";
+        const preview = content ? (content.slice(0, 100) + (content.length > 100 ? "…" : "")) : "Sent an attachment";
+
+        // Create in-app notification for recipient
+        await supabase.from("notifications").insert({
+          user_id: recipientId,
+          title: `New message from ${senderName}`,
+          body: preview,
+          type: "message",
+          action_url: `/dashboard/chats?conversationId=${conversationId}`,
+        });
+
+        // Send email notification
+        if (authUser?.user?.email) {
+          sendEmail({
+            to: authUser.user.email,
+            subject: `New message from ${senderName} — iVest`,
+            html: emailTemplates.newMessage(
+              recipientProfile?.full_name || "User",
+              senderName,
+              preview
+            ),
+          }).catch((err) => console.error("Failed to send notification email:", err));
         }
       }
     }
