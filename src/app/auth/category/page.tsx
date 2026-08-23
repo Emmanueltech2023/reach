@@ -38,18 +38,23 @@ export default function CategoryPage() {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
-   if (user) {
-  await fetch("/api/profile/update", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      userId: user.id,
-      updates: { category: selected },
-    }),
-  });
-}
+    let redirectPath = "/dashboard/investor";
+    if (user) {
+      const { data: prof } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+      await fetch("/api/profile/update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user.id,
+          updates: { category: selected },
+        }),
+      });
 
-    router.push("/auth/kyc");
+      if (prof?.role === "builder") redirectPath = "/dashboard/builder";
+      if (prof?.role === "talent") redirectPath = "/dashboard/talent";
+    }
+
+    router.push(redirectPath);
     setLoading(false);
   };
 

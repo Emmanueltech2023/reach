@@ -1,29 +1,20 @@
-import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
-import { sendEmail, emailTemplates } from "@/lib/email";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+import { sendEmail } from "@/lib/email";
+import { requireAdmin, adminSupabase as supabase } from "@/lib/auth-server";
+import { logActivity } from "@/lib/activity-logger";
 
 export async function POST(req: NextRequest) {
   try {
-    // 1. Authorization: Essential to re-add
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    
-    const { data: { user: admin } } = await supabase.auth.getUser(authHeader.replace("Bearer ", ""));
-    const { data: adminProfile } = await supabase.from("profiles").select("role").eq("id", admin?.id).single();
-    if (adminProfile?.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    const auth = await requireAdmin(req);
+    if (!auth.success) {
+      return auth.response;
+    }
 
-    // 2. Input validation
-    const { userId, action } = await req.json();
+    const { userId, action, rejectionReason } = await req.json();
     if (!userId || !["approve", "reject"].includes(action)) {
       return NextResponse.json({ error: "Invalid parameters" }, { status: 400 });
     }
 
-    // 3. Fetch data in parallel
     const [profileRes, authRes] = await Promise.all([
       supabase.from("profiles").select("full_name, role").eq("id", userId).single(),
       supabase.auth.admin.getUserById(userId)
@@ -32,48 +23,64 @@ export async function POST(req: NextRequest) {
     const { full_name, role } = profileRes.data || {};
     const email = authRes.data.user?.email;
 
-    // 4. Atomic Database Updates
+    // Database Update
+    const updatePayload: Record<string, any> = {
+      kyc_status: action === "approve" ? "approved" : "rejected",
+      is_verified: action === "approve",
+    };
+
+    if (action === "reject" && rejectionReason) {
+      updatePayload.kyc_rejection_reason = rejectionReason;
+    }
+
     const { error: updateError } = await supabase
       .from("profiles")
-      .update({
-        kyc_status: action === "approve" ? "approved" : "rejected",
-        is_verified: action === "approve",
-        updated_at: new Date().toISOString(),
-      })
+      .update(updatePayload)
       .eq("id", userId);
 
     if (updateError) throw updateError;
 
+    await logActivity({
+      actorId: auth.user.id,
+      actorName: auth.profile.full_name || auth.profile.username,
+      actorRole: auth.profile.role,
+      actionType: action === "approve" ? "APPROVE_KYC" : "REJECT_KYC",
+      targetId: userId,
+      targetType: "user",
+      description: `Admin ${auth.profile.full_name || auth.profile.username} ${action}d KYC for user ${full_name || userId}`,
+    }).catch(() => {});
+
+    // Notification
     const dashUrl = role === "builder" ? "/dashboard/builder" : role === "talent" ? "/dashboard/talent" : "/dashboard/investor";
 
-    // 5. Secondary tasks: Fire-and-forget (do not await critical path)
-    const notification = supabase.from("notifications").insert({
+    await supabase.from("notifications").insert({
       user_id: userId,
       title: action === "approve" ? "KYC Approved ✓" : "KYC Rejected",
-      body: action === "approve" ? "You have full access to REACH." : "Please resubmit documents.",
-      type: "kyc",
-      action_url: action === "approve" ? dashUrl : "/auth/kyc",
+      body: action === "approve"
+        ? "Your identity documents have been approved. You now have full verified status."
+        : `KYC documents declined: ${rejectionReason || "Please upload clearer document photos and resubmit."}`,
+      type: "general",
+      action_url: action === "approve" ? dashUrl : "/dashboard/profile",
     });
 
-    const trustEvent = action === "approve" 
-      ? supabase.from("trust_events").insert({ user_id: userId, event_type: "kyc_verified", points: 20 })
-      : Promise.resolve();
+    if (action === "approve") {
+      await supabase.from("trust_events").insert({ user_id: userId, event_type: "kyc_verified", points: 20 }).catch(() => {});
+    }
 
-    // Wrap email in a non-blocking catch so it never fails the request
-    const userName = full_name || "User";
-    const emailTask = email 
-      ? sendEmail({
-          to: email,
-          subject: action === "approve" ? "✓ Your REACH identity is verified" : "REACH — KYC update",
-          html: action === "approve" ? emailTemplates.kycApproved(userName, role || "investor") : emailTemplates.kycRejected(userName),
-        }).catch(err => console.error("Email failed:", err))
-      : Promise.resolve();
+    // Email
+    if (email) {
+      const userName = full_name || "User";
+      const emailSubject = action === "approve" ? "✓ Your REACH identity is verified" : "REACH — KYC Document Update";
+      const emailHtml = action === "approve"
+        ? `<div style="font-family: Arial; padding: 20px; background: #0A0A0F; color: #F5F3ED;"><h2>Congratulations ${userName}!</h2><p>Your identity documents have been approved. You now display an official Verified checkmark badge on REACH.</p></div>`
+        : `<div style="font-family: Arial; padding: 20px; background: #0A0A0F; color: #F5F3ED;"><h2>Hello ${userName},</h2><p>Your KYC application could not be verified.</p><p><strong>Reason:</strong> ${rejectionReason || 'Documents were unclear or incomplete.'}</p><p>Please log in to your profile to resubmit your documents.</p></div>`;
 
-    await Promise.all([notification, trustEvent, emailTask]);
+      await sendEmail({ to: email, subject: emailSubject, html: emailHtml }).catch(() => {});
+    }
 
-    return NextResponse.json({ success: true });
-  } catch (err) {
-    console.error("KYC Approval Error:", err);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    return NextResponse.json({ success: true, status: action === "approve" ? "approved" : "rejected" });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "KYC action failed";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

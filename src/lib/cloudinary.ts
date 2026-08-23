@@ -34,6 +34,7 @@ export { cloudinary };
 
 export interface CloudinaryUploadResult {
   url: string;
+  secure_url?: string;
   public_id: string;
   format: string;
   width?: number;
@@ -81,6 +82,7 @@ export async function uploadBufferToCloudinary(
         }
         resolve({
           url: result.secure_url,
+          secure_url: result.secure_url,
           public_id: result.public_id,
           format: result.format,
           width: result.width,

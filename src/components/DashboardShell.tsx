@@ -7,9 +7,10 @@ import {
   Compass, MessageCircle, Calendar, Bookmark,
   User, LayoutGrid, Upload, TrendingUp, Users,
   Bell, LogOut, Menu, X, Handshake, Sparkles, Gift,
-  Briefcase, Search, FileText
+  Briefcase, Search, FileText, ShieldCheck
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import VerifiedBadge from "@/components/VerifiedBadge";
 
 type NavItem = {
   id: string;
@@ -22,12 +23,13 @@ const INVESTOR_NAV: NavItem[] = [
   { id: "explore", icon: Compass, label: "Explore", href: "/dashboard/investor" },
   { id: "matches", icon: Sparkles, label: "AI Matches", href: "/dashboard/matches" },
   { id: "chats", icon: MessageCircle, label: "Messages", href: "/dashboard/chats" },
+  { id: "notifications", icon: Bell, label: "Notifications", href: "/dashboard/notifications" },
   { id: "deals", icon: Handshake, label: "Deals", href: "/dashboard/deals" },
   { id: "meetings", icon: Calendar, label: "Meetings", href: "/dashboard/meetings" },
   { id: "bookmarks", icon: Bookmark, label: "Saved", href: "/dashboard/bookmarks" },
+  { id: "jobs", icon: Briefcase, label: "Manage Jobs", href: "/dashboard/jobs/manage" },
   { id: "community", icon: Users, label: "Community", href: "/dashboard/community" },
   { id: "referrals", icon: Gift, label: "Refer & earn", href: "/dashboard/referrals" },
-  { id: "post-job", icon: Briefcase, label: "Post a Job", href: "/dashboard/jobs/post" },
   { id: "profile", icon: User, label: "Profile", href: "/dashboard/profile" },
 ];
 
@@ -36,11 +38,12 @@ const BUILDER_NAV: NavItem[] = [
   { id: "investors", icon: TrendingUp, label: "Find Investors", href: "/dashboard/investors" },
   { id: "upload", icon: Upload, label: "Upload Project", href: "/dashboard/builder/upload" },
   { id: "chats", icon: MessageCircle, label: "Messages", href: "/dashboard/chats" },
+  { id: "notifications", icon: Bell, label: "Notifications", href: "/dashboard/notifications" },
   { id: "meetings", icon: Calendar, label: "Meetings", href: "/dashboard/meetings" },
   { id: "deals", icon: Handshake, label: "Deals", href: "/dashboard/deals" },
+  { id: "jobs", icon: Briefcase, label: "Manage Jobs", href: "/dashboard/jobs/manage" },
   { id: "community", icon: Users, label: "Community", href: "/dashboard/community" },
   { id: "team", icon: Users, label: "Team", href: "/dashboard/team" },
-  { id: "post-job", icon: Briefcase, label: "Post a Job", href: "/dashboard/jobs/post" },
   { id: "referrals", icon: Gift, label: "Refer & earn", href: "/dashboard/referrals" },
   { id: "profile", icon: User, label: "Profile", href: "/dashboard/profile" },
 ];
@@ -50,6 +53,7 @@ const TALENT_NAV: NavItem[] = [
   { id: "applications", icon: FileText, label: "Applications", href: "/dashboard/talent/applications" },
   { id: "saved", icon: Bookmark, label: "Saved Jobs", href: "/dashboard/talent/saved" },
   { id: "chats", icon: MessageCircle, label: "Messages", href: "/dashboard/chats" },
+  { id: "notifications", icon: Bell, label: "Notifications", href: "/dashboard/notifications" },
   { id: "community", icon: Users, label: "Community", href: "/dashboard/community" },
   { id: "referrals", icon: Gift, label: "Refer & earn", href: "/dashboard/referrals" },
   { id: "profile", icon: User, label: "Profile", href: "/dashboard/profile" },
@@ -72,7 +76,7 @@ export default function DashboardShell({
   username,
   avatarUrl,
   unreadMessageCount = 0,
-  unreadNotificationCount = 0,
+  unreadNotificationCount,
 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
@@ -90,7 +94,7 @@ export default function DashboardShell({
     } else {
       try {
         const cached = sessionStorage.getItem("user_role") || localStorage.getItem("user_role");
-        if (cached && (cached === "talent" || cached === "builder" || cached === "investor")) {
+        if (cached && (cached === "talent" || cached === "builder" || cached === "investor" || cached === "admin")) {
           setCurrentRole(cached);
         }
       } catch {}
@@ -98,13 +102,15 @@ export default function DashboardShell({
   }, [role]);
 
   const [notifCount, setNotifCount] = useState<number | null>(
-    unreadNotificationCount > 0 ? unreadNotificationCount : null
+    unreadNotificationCount !== undefined ? unreadNotificationCount : null
   );
 
   const [userData, setUserData] = useState<{
     fullName: string;
     username: string;
     avatarUrl: string | null;
+    subscriptionTier?: string;
+    isVerified?: boolean;
   }>({
     fullName: fullName || "",
     username: username || "",
@@ -118,6 +124,8 @@ export default function DashboardShell({
         fullName: fullName !== undefined && fullName !== "" ? fullName : prev.fullName,
         username: username !== undefined && username !== "" ? username : prev.username,
         avatarUrl: avatarUrl !== undefined ? avatarUrl : prev.avatarUrl,
+        subscriptionTier: prev.subscriptionTier,
+        isVerified: prev.isVerified,
       }));
     }
   }, [fullName, username, avatarUrl]);
@@ -131,6 +139,8 @@ export default function DashboardShell({
           fullName: detail.full_name || detail.fullName || prev.fullName,
           username: detail.username || prev.username,
           avatarUrl: detail.avatar_url !== undefined ? detail.avatar_url : detail.avatarUrl !== undefined ? detail.avatarUrl : prev.avatarUrl,
+          subscriptionTier: detail.subscription_tier !== undefined ? detail.subscription_tier : prev.subscriptionTier,
+          isVerified: detail.is_verified !== undefined ? detail.is_verified : prev.isVerified,
         }));
         if (detail.role) {
           setCurrentRole(detail.role);
@@ -163,7 +173,12 @@ export default function DashboardShell({
     }
   };
 
-  const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
+  const isActive = (href: string) => {
+    if (href === "/dashboard/jobs/manage") {
+      return pathname.startsWith("/dashboard/jobs");
+    }
+    return pathname === href || pathname.startsWith(href + "/");
+  };
 
   const displayNotifCount = unreadNotificationCount !== undefined ? unreadNotificationCount : (notifCount ?? 0);
 
@@ -177,7 +192,7 @@ export default function DashboardShell({
 
         const { data: profile } = await supabase
           .from("profiles")
-          .select("full_name, username, avatar_url, role")
+          .select("full_name, username, avatar_url, role, subscription_tier, is_verified")
           .eq("id", user.id)
           .single();
 
@@ -186,6 +201,8 @@ export default function DashboardShell({
             fullName: profile.full_name || "",
             username: profile.username || "",
             avatarUrl: profile.avatar_url || null,
+            subscriptionTier: profile.subscription_tier,
+            isVerified: profile.is_verified,
           });
           if (profile.role) {
             setCurrentRole(profile.role);
@@ -197,6 +214,18 @@ export default function DashboardShell({
         }
 
         const fetchCount = async () => {
+          try {
+            const res = await fetch(`/api/notifications?userId=${user.id}`);
+            if (res.ok) {
+              const data = await res.json();
+              if (Array.isArray(data)) {
+                const unread = data.filter((n: any) => !n.is_read).length;
+                setNotifCount(unread);
+                return;
+              }
+            }
+          } catch {}
+
           const { count, error } = await supabase
             .from("notifications")
             .select("id", { count: "exact", head: true })
@@ -280,12 +309,28 @@ export default function DashboardShell({
                     {unreadMessageCount}
                   </span>
                 )}
+
+                {item.id === "notifications" && displayNotifCount > 0 && (
+                  <span className="ml-auto min-w-[20px] h-5 px-1.5 bg-[#C9A84C] rounded-full text-[#1A1A2E] text-xs flex items-center justify-center font-bold">
+                    {displayNotifCount}
+                  </span>
+                )}
               </button>
             );
           })}
         </nav>
 
         <div className="px-3 py-4 border-t border-[#3A3A52]">
+          {currentRole === "admin" && (
+            <button
+              onClick={() => router.push("/admin")}
+              className="flex items-center justify-center gap-2 w-full px-3 py-2 rounded-lg bg-[#C9A84C15] border border-[#C9A84C40] text-[#C9A84C] hover:bg-[#C9A84C25] transition text-xs font-bold mb-2 shadow-sm"
+            >
+              <ShieldCheck size={14} />
+              <span>Admin Control Panel</span>
+            </button>
+          )}
+
           <button
             onClick={() => router.push("/dashboard/profile")}
             className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg hover:bg-[#1A1A2E] transition mb-1"
@@ -305,8 +350,15 @@ export default function DashboardShell({
             </div>
             
             <div className="flex-1 min-w-0 text-left">
-              <div className="text-[#F5F3ED] text-xs font-medium truncate">
-                {userData.fullName || "Loading…"}
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="text-[#F5F3ED] text-xs font-medium truncate">
+                  {userData.fullName || "Loading…"}
+                </span>
+                <VerifiedBadge 
+                  tier={userData.subscriptionTier} 
+                  isVerified={userData.isVerified} 
+                  size={14} 
+                />
               </div>
               <div className="text-[#5C5A70] text-xs truncate">
                 @{userData.username || "username"}
@@ -396,6 +448,12 @@ export default function DashboardShell({
                         {unreadMessageCount}
                       </span>
                     )}
+
+                    {item.id === "notifications" && displayNotifCount > 0 && (
+                      <span className="ml-auto min-w-[20px] h-5 px-1.5 bg-[#C9A84C] rounded-full text-[#1A1A2E] text-xs flex items-center justify-center font-bold">
+                        {displayNotifCount}
+                      </span>
+                    )}
                   </button>
                 );
               })}
@@ -427,7 +485,7 @@ export default function DashboardShell({
             >
               <Bell size={17} className="text-[#A8A6B8]" />
               {displayNotifCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#C9A84C] rounded-full text-[#1A1A2E] text-xs flex items-center justify-center font-medium">
+                <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-[#C9A84C] rounded-full text-[#1A1A2E] text-[10px] flex items-center justify-center font-bold">
                   {displayNotifCount}
                 </span>
               )}
@@ -453,13 +511,17 @@ export default function DashboardShell({
               className="flex-1 flex flex-col items-center justify-center gap-0.5 py-1 relative"
             >
               <Icon size={18} className={active ? "text-[#C9A84C]" : "text-[#5C5A70]"} />
-              <span className={`text-[10px] tracking-tight ${active ? "text-[#C9A84C] font-medium" : "text-[#5C5A70]"}`}>
+              <span className={`text-[10px] truncate max-w-[60px] ${active ? "text-[#C9A84C] font-medium" : "text-[#5C5A70]"}`}>
                 {item.label}
               </span>
-
               {item.id === "chats" && unreadMessageCount > 0 && (
-                <span className="absolute top-2 right-4 w-4 h-4 bg-[#C9A84C] rounded-full text-[#1A1A2E] text-[10px] flex items-center justify-center font-bold">
+                <span className="absolute top-2 right-1/4 w-4 h-4 bg-[#C9A84C] rounded-full text-[#1A1A2E] text-[10px] flex items-center justify-center font-bold">
                   {unreadMessageCount}
+                </span>
+              )}
+              {item.id === "notifications" && displayNotifCount > 0 && (
+                <span className="absolute top-2 right-1/4 w-4 h-4 bg-[#C9A84C] rounded-full text-[#1A1A2E] text-[10px] flex items-center justify-center font-bold">
+                  {displayNotifCount}
                 </span>
               )}
             </button>

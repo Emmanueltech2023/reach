@@ -8,7 +8,10 @@ import {
   Briefcase, MessageSquare, Pin, Trash2, ExternalLink,
   Shield, Check, AlertTriangle, FileText, Download,
   Layers, Settings, Sparkles, Filter, RefreshCw, ChevronRight,
-  Globe, Mail, Lock, UserCheck, Eye, EyeOff
+  Globe, Mail, Lock, UserCheck, Eye, EyeOff,
+  Edit, Ban, AlertOctagon, UserX, Star, ShieldAlert,
+  KeyRound, Activity, Terminal, Smartphone, Megaphone,
+  Receipt, Share2, AlertCircle, Send, Award
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
@@ -25,6 +28,9 @@ type Profile = {
   trust_score?: number;
   avatar_url?: string | null;
   preferred_currency?: string;
+  is_scam?: boolean;
+  is_banned?: boolean;
+  bio?: string | null;
 };
 
 type UpgradeRequest = {
@@ -107,12 +113,69 @@ export default function AdminPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   
-  // Data Collections
+  // Dedicated Admin Auth & Session State
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean | null>(null);
+  const [adminLoginForm, setAdminLoginForm] = useState({ email: "", password: "" });
+  const [adminLoginLoading, setAdminLoginLoading] = useState(false);
+  const [adminLoginError, setAdminLoginError] = useState<string | null>(null);
+
+  // PIN-Gated Universal Audit Vault States
+  const [auditUnlocked, setAuditUnlocked] = useState<boolean>(() => {
+    try {
+      return sessionStorage.getItem("admin_audit_unlocked") === "true";
+    } catch {
+      return false;
+    }
+  });
+  const [auditPasscode, setAuditPasscode] = useState(() => {
+    try {
+      return sessionStorage.getItem("admin_passcode") || "";
+    } catch {
+      return "";
+    }
+  });
+  const [auditPasscodeError, setAuditPasscodeError] = useState<string | null>(null);
+  const [verifyingPasscode, setVerifyingPasscode] = useState(false);
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [loadingAuditLogs, setLoadingAuditLogs] = useState(false);
+  const [auditFilter, setAuditFilter] = useState("all");
+  const [auditSearch, setAuditSearch] = useState("");
+
+  // Passcode Settings Modal State
+  const [showPasscodeModal, setShowPasscodeModal] = useState(false);
+  const [newPasscode, setNewPasscode] = useState("");
+  const [passcodeChangeMsg, setPasscodeChangeMsg] = useState<string | null>(null);
+
+  // User Filtering and Editing States
+  const [userFilter, setUserFilter] = useState("all");
+  const [editingUser, setEditingUser] = useState<Profile | null>(null);
+  const [editFormData, setEditFormData] = useState<Partial<Profile>>({});
+  const [savingEdit, setSavingEdit] = useState(false);
+  
+  // System Domain Collections
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [upgradeRequests, setUpgradeRequests] = useState<UpgradeRequest[]>([]);
+  const [upgradeFilter, setUpgradeFilter] = useState("all");
   const [projects, setProjects] = useState<Project[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [communityPosts, setCommunityPosts] = useState<CommunityPost[]>([]);
+  const [deals, setDeals] = useState<any[]>([]);
+  const [invoices, setInvoices] = useState<any[]>([]);
+  const [referrals, setReferrals] = useState<any[]>([]);
+  const [topReferrers, setTopReferrers] = useState<any[]>([]);
+  const [flaggedMessages, setFlaggedMessages] = useState<any[]>([]);
+  const [conversations, setConversations] = useState<any[]>([]);
+  const [msgSubTab, setMsgSubTab] = useState<"flagged" | "all">("flagged");
+  const [inspectingConversation, setInspectingConversation] = useState<any | null>(null);
+
+  // Notification & Broadcast Modals
+  const [broadcastForm, setBroadcastForm] = useState({ target: "all", userId: "", title: "", body: "", actionUrl: "" });
+  const [sendingBroadcast, setSendingBroadcast] = useState(false);
+  const [notifyUserModal, setNotifyUserModal] = useState<Profile | null>(null);
+  const [notifyForm, setNotifyForm] = useState({ title: "", body: "", actionUrl: "" });
+  const [sendingNotify, setSendingNotify] = useState(false);
+  const [kycRejectionReason, setKycRejectionReason] = useState("");
+  const [rejectingKycUser, setRejectingKycUser] = useState<Profile | null>(null);
 
   // Statistics
   const [stats, setStats] = useState({
@@ -139,8 +202,43 @@ export default function AdminPage() {
   const fetchAdminData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/admin/data");
-      const json = await res.json();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        setIsAdminAuthenticated(false);
+        setLoading(false);
+        return;
+      }
+
+      const headers = { Authorization: `Bearer ${session.access_token}` };
+      const [resData, resDeals, resInvoices, resReferrals, resMessages] = await Promise.all([
+        fetch("/api/admin/data", { headers }),
+        fetch("/api/admin/deals", { headers }),
+        fetch("/api/admin/invoices", { headers }),
+        fetch("/api/admin/referrals", { headers }),
+        fetch("/api/admin/messages", { headers }),
+      ]);
+
+      const json = await resData.json();
+
+      if (!resData.ok || json.error) {
+        setIsAdminAuthenticated(false);
+        setLoading(false);
+        return;
+      }
+
+      setIsAdminAuthenticated(true);
+
+      const jsonDeals = await resDeals.json().catch(() => ({ deals: [] }));
+      const jsonInvoices = await resInvoices.json().catch(() => ({ invoices: [] }));
+      const jsonReferrals = await resReferrals.json().catch(() => ({ referrals: [], topReferrers: [] }));
+      const jsonMessages = await resMessages.json().catch(() => ({ flags: [] }));
+
+      setDeals(jsonDeals.deals || []);
+      setInvoices(jsonInvoices.invoices || []);
+      setReferrals(jsonReferrals.referrals || []);
+      setTopReferrers(jsonReferrals.topReferrers || []);
+      setFlaggedMessages(jsonMessages.flags || []);
+      setConversations(jsonMessages.conversations || []);
 
       const allProfiles: Profile[] = json.profiles || [];
       const projs: Project[] = json.projects || [];
@@ -192,14 +290,134 @@ export default function AdminPage() {
       });
     } catch (err) {
       console.error("Admin data resolution failed:", err);
+      setIsAdminAuthenticated(false);
     } finally {
       setLoading(false);
     }
-  }, [supabase]);
+  }, []);
+
+  const fetchAuditLogs = useCallback(async (code: string) => {
+    setLoadingAuditLogs(true);
+    try {
+      const res = await fetch(`/api/admin/audit-logs?passcode=${encodeURIComponent(code)}&filter=${auditFilter}&search=${encodeURIComponent(auditSearch)}`);
+      const json = await res.json();
+      if (res.ok) {
+        setAuditLogs(json.logs || []);
+        setAuditPasscodeError(null);
+      } else {
+        setAuditPasscodeError(json.error || "Access Denied");
+      }
+    } catch (e) {
+      setAuditPasscodeError("Network error fetching audit logs");
+    } finally {
+      setLoadingAuditLogs(false);
+    }
+  }, [auditFilter, auditSearch]);
+
+  const handleVerifyPasscode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setVerifyingPasscode(true);
+    setAuditPasscodeError(null);
+    try {
+      const res = await fetch("/api/admin/audit-logs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ passcode: auditPasscode }),
+      });
+      const json = await res.json();
+      if (res.ok && json.valid) {
+        setAuditUnlocked(true);
+        try {
+          sessionStorage.setItem("admin_audit_unlocked", "true");
+          sessionStorage.setItem("admin_passcode", auditPasscode);
+        } catch {}
+        await fetchAuditLogs(auditPasscode);
+      } else {
+        setAuditPasscodeError(json.error || "Incorrect Passcode");
+      }
+    } catch {
+      setAuditPasscodeError("Passcode verification failed");
+    } finally {
+      setVerifyingPasscode(false);
+    }
+  };
+
+  const handleAdminLoginSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAdminLoginLoading(true);
+    setAdminLoginError(null);
+
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: adminLoginForm.email,
+        password: adminLoginForm.password,
+      });
+
+      if (error) {
+        setAdminLoginError(error.message);
+        setAdminLoginLoading(false);
+        return;
+      }
+
+      if (data.user) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", data.user.id)
+          .single();
+
+        if (profile?.role !== "admin") {
+          setAdminLoginError("Access Denied: You do not have administrator permissions.");
+          await supabase.auth.signOut();
+          setAdminLoginLoading(false);
+          return;
+        }
+
+        setIsAdminAuthenticated(true);
+        await fetchAdminData();
+      }
+    } catch (err: any) {
+      setAdminLoginError(err.message || "Admin login failed");
+    } finally {
+      setAdminLoginLoading(false);
+    }
+  };
+
+  const handleAdminLogout = async () => {
+    try {
+      if (typeof window !== "undefined") {
+        sessionStorage.removeItem("admin_audit_unlocked");
+        sessionStorage.removeItem("admin_passcode");
+        sessionStorage.removeItem("user_role");
+        localStorage.removeItem("user_role");
+      }
+      await supabase.auth.signOut();
+      setIsAdminAuthenticated(false);
+      showNotification("Signed out of Admin session successfully.");
+    } catch (err) {
+      console.error("Admin logout error:", err);
+    }
+  };
 
   useEffect(() => {
     void fetchAdminData();
-  }, [fetchAdminData]);
+
+    // Supabase Realtime subscription on profiles table for instant KYC & signup popups
+    const channel = supabase
+      .channel("admin-realtime-profiles")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "profiles" },
+        () => {
+          void fetchAdminData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchAdminData, supabase]);
 
   // ─── ACTIONS ─────────────────────────────────────────────────────────────
 
@@ -264,6 +482,7 @@ export default function AdminPage() {
 
   const approveUpgrade = async (requestId: string, userId: string, plan: string) => {
     try {
+      const normalizedPlan = (plan || "pro").toLowerCase().trim() === "premium" ? "premium" : "pro";
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch("/api/admin/approve-upgrade", {
         method: "POST",
@@ -271,7 +490,7 @@ export default function AdminPage() {
           "Content-Type": "application/json",
           ...(session?.access_token ? { "Authorization": `Bearer ${session.access_token}` } : {})
         },
-        body: JSON.stringify({ requestId, userId, plan, action: "approve" }),
+        body: JSON.stringify({ requestId, userId, plan: normalizedPlan, action: "approve" }),
       });
 
       if (res.ok) {
@@ -279,13 +498,20 @@ export default function AdminPage() {
           prev.map((r) => (r.id === requestId ? { ...r, status: "approved" } : r))
         );
         setProfiles((prev) =>
-          prev.map((p) => (p.id === userId ? { ...p, subscription_tier: plan } : p))
+          prev.map((p) => (p.id === userId ? { ...p, subscription_tier: normalizedPlan } : p))
         );
-        setStats((prev) => ({
-          ...prev,
-          pendingUpgrades: Math.max(0, prev.pendingUpgrades - 1),
-        }));
-        showNotification(`Plan upgraded to ${plan.toUpperCase()}! 💳`);
+        setStats((prev) => {
+          const proCount = prev.proSubscribers + (normalizedPlan === "pro" ? 1 : 0);
+          const premiumCount = prev.premiumSubscribers + (normalizedPlan === "premium" ? 1 : 0);
+          return {
+            ...prev,
+            pendingUpgrades: Math.max(0, prev.pendingUpgrades - 1),
+            proSubscribers: proCount,
+            premiumSubscribers: premiumCount,
+            estimatedMRR: proCount * 49 + premiumCount * 149,
+          };
+        });
+        showNotification(`Plan upgraded to ${normalizedPlan.toUpperCase()}! 💳`);
       } else {
         const errJson = await res.json();
         showNotification(errJson.error || "Failed to approve upgrade");
@@ -380,6 +606,133 @@ export default function AdminPage() {
       }
     } catch (err) {
       console.error("Verification toggle failed:", err);
+    }
+  };
+
+  const toggleScamStatus = async (userId: string, currentStatus: boolean) => {
+    try {
+      const nextScam = !currentStatus;
+      const updates: any = {
+        is_scam: nextScam,
+      };
+      if (nextScam) {
+        updates.trust_score = 0;
+        updates.is_verified = false;
+        updates.kyc_status = "rejected";
+      } else {
+        updates.trust_score = 85;
+      }
+      const res = await fetch("/api/admin/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, updates }),
+      });
+      if (res.ok) {
+        setProfiles((prev) =>
+          prev.map((p) => (p.id === userId ? { ...p, ...updates } : p))
+        );
+        showNotification(
+          nextScam
+            ? "⚠️ User flagged as SCAM / FRAUD ALERT across platform!"
+            : "Scam warning removed from user profile."
+        );
+      }
+    } catch (err) {
+      console.error("Scam toggle failed:", err);
+    }
+  };
+
+  const toggleBanStatus = async (userId: string, currentStatus: boolean) => {
+    try {
+      const nextBan = !currentStatus;
+      const res = await fetch("/api/admin/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, updates: { is_banned: nextBan } }),
+      });
+      if (res.ok) {
+        setProfiles((prev) =>
+          prev.map((p) => (p.id === userId ? { ...p, is_banned: nextBan } : p))
+        );
+        showNotification(
+          nextBan
+            ? "🚫 User account SUSPENDED / BANNED from platform."
+            : "User account unsuspended."
+        );
+      }
+    } catch (err) {
+      console.error("Ban toggle failed:", err);
+    }
+  };
+
+  const deleteUser = async (userId: string, name: string) => {
+    if (!confirm(`Are you sure you want to PERMANENTLY DELETE user "${name}" and all their projects, jobs, posts, and data? This action CANNOT be undone.`)) {
+      return;
+    }
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+      if (res.ok) {
+        setProfiles((prev) => prev.filter((p) => p.id !== userId));
+        setStats((prev) => ({
+          ...prev,
+          totalUsers: Math.max(0, prev.totalUsers - 1),
+        }));
+        showNotification(`User "${name}" has been permanently deleted.`);
+      } else {
+        const errJson = await res.json();
+        showNotification(errJson.error || "Failed to delete user");
+      }
+    } catch (err) {
+      console.error("User deletion error:", err);
+    }
+  };
+
+  const openEditUser = (user: Profile) => {
+    setEditingUser(user);
+    setEditFormData({
+      full_name: user.full_name || "",
+      username: user.username || "",
+      role: user.role || "investor",
+      country: user.country || "",
+      subscription_tier: user.subscription_tier || "free",
+      trust_score: user.trust_score ?? 85,
+      is_verified: !!user.is_verified,
+      is_scam: !!user.is_scam,
+      is_banned: !!user.is_banned,
+      bio: user.bio || "",
+    });
+  };
+
+  const handleSaveUserEdit = async () => {
+    if (!editingUser) return;
+    setSavingEdit(true);
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: editingUser.id,
+          updates: editFormData,
+        }),
+      });
+      if (res.ok) {
+        setProfiles((prev) =>
+          prev.map((p) => (p.id === editingUser.id ? { ...p, ...editFormData } : p))
+        );
+        showNotification(`User "${editFormData.full_name || editingUser.full_name}" updated! ✓`);
+        setEditingUser(null);
+      } else {
+        const errJson = await res.json();
+        showNotification(errJson.error || "Failed to save updates");
+      }
+    } catch (err) {
+      console.error("User edit save error:", err);
+    } finally {
+      setSavingEdit(false);
     }
   };
 
@@ -513,18 +866,29 @@ export default function AdminPage() {
     showNotification("Users exported to CSV! 📥");
   };
 
-  // Filtered lists based on search
+  // Filtered lists based on search & category
   const filteredUsers = useMemo(() => {
-    if (!searchQuery) return profiles;
+    let result = profiles;
+    if (userFilter === "investor") result = result.filter(p => p.role === "investor");
+    else if (userFilter === "builder") result = result.filter(p => p.role === "builder");
+    else if (userFilter === "talent") result = result.filter(p => p.role === "talent");
+    else if (userFilter === "admin") result = result.filter(p => p.role === "admin");
+    else if (userFilter === "scam") result = result.filter(p => !!p.is_scam);
+    else if (userFilter === "banned") result = result.filter(p => !!p.is_banned);
+    else if (userFilter === "verified") result = result.filter(p => !!p.is_verified);
+    else if (userFilter === "pro") result = result.filter(p => (p.subscription_tier || "").toLowerCase() === "pro" || (p.subscription_tier || "").toLowerCase() === "premium");
+
+    if (!searchQuery) return result;
     const q = searchQuery.toLowerCase();
-    return profiles.filter(
+    return result.filter(
       (p) =>
         p.full_name?.toLowerCase().includes(q) ||
         p.username?.toLowerCase().includes(q) ||
         p.role?.toLowerCase().includes(q) ||
-        p.country?.toLowerCase().includes(q)
+        p.country?.toLowerCase().includes(q) ||
+        (p.bio && p.bio.toLowerCase().includes(q))
     );
-  }, [profiles, searchQuery]);
+  }, [profiles, searchQuery, userFilter]);
 
   const filteredProjects = useMemo(() => {
     if (!searchQuery) return projects;
@@ -550,14 +914,114 @@ export default function AdminPage() {
 
   const TABS = [
     { id: "overview", label: "Executive Overview", icon: BarChart2 },
-    { id: "kyc", label: "KYC Center", badge: stats.pendingKYC, icon: ShieldCheck },
+    { id: "kyc", label: "KYC Queue ⚡", badge: stats.pendingKYC, icon: ShieldCheck },
     { id: "upgrades", label: "Subscriptions", badge: stats.pendingUpgrades, icon: CreditCard },
     { id: "users", label: `Users (${profiles.length})`, icon: Users },
     { id: "projects", label: `Projects (${projects.length})`, icon: TrendingUp },
-    { id: "jobs", label: `Jobs & Talent (${jobs.length})`, icon: Briefcase },
+    { id: "deals", label: `Deals (${deals.length})`, icon: DollarSign },
+    { id: "invoices", label: `Invoices (${invoices.length})`, icon: Receipt },
+    { id: "messages", label: `Flagged Messages`, badge: flaggedMessages.filter((m: any) => m.status === "pending").length, icon: AlertCircle },
     { id: "community", label: `Community (${communityPosts.length})`, icon: MessageSquare },
+    { id: "referrals", label: `Referral Network`, icon: Share2 },
+    { id: "broadcast", label: "Broadcast Center", icon: Megaphone },
+    { id: "audit", label: "Audit Vault 🕵️", icon: ShieldAlert },
     { id: "docs", label: "System Architecture", icon: Settings },
   ];
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#0A0A0F] text-[#F5F3ED] flex flex-col items-center justify-center gap-3">
+        <Loader2 size={32} className="animate-spin text-[#C9A84C]" />
+        <p className="text-xs text-[#A8A6B8] font-medium">Authenticating REACH Admin Session…</p>
+      </div>
+    );
+  }
+
+  if (isAdminAuthenticated === false) {
+    return (
+      <div className="min-h-screen bg-[#0A0A0F] text-[#F5F3ED] flex items-center justify-center p-4">
+        <div className="w-full max-w-md bg-[#1A1A2E] border border-[#C9A84C]/40 rounded-3xl p-6 sm:p-8 space-y-6 shadow-2xl relative overflow-hidden">
+          <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-48 h-48 bg-[#C9A84C]/10 rounded-full blur-3xl pointer-events-none" />
+
+          <div className="text-center space-y-2">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#C9A84C] to-[#997828] text-[#0A0A0F] font-black text-2xl flex items-center justify-center mx-auto shadow-lg shadow-[#C9A84C]/20">
+              R
+            </div>
+            <h1 className="text-xl sm:text-2xl font-bold text-[#F5F3ED] tracking-tight pt-2">
+              REACH Admin Portal
+            </h1>
+            <p className="text-xs text-[#A8A6B8]">
+              High-Security Administrative Command Center
+            </p>
+          </div>
+
+          {adminLoginError && (
+            <div className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs font-semibold flex items-center gap-2">
+              <AlertTriangle size={15} className="shrink-0 text-red-400" />
+              <span>{adminLoginError}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleAdminLoginSubmit} className="space-y-4">
+            <div>
+              <label className="text-[#A8A6B8] text-xs font-medium mb-1.5 block">
+                Admin Email Address
+              </label>
+              <input
+                type="email"
+                required
+                value={adminLoginForm.email}
+                onChange={(e) => setAdminLoginForm({ ...adminLoginForm, email: e.target.value })}
+                placeholder="admin@reachinvestment.com"
+                className="w-full bg-[#0F0F1A] border border-[#3A3A52] text-[#F5F3ED] text-sm rounded-xl px-4 py-3 outline-none focus:border-[#C9A84C] transition placeholder-[#5C5A70]"
+              />
+            </div>
+
+            <div>
+              <label className="text-[#A8A6B8] text-xs font-medium mb-1.5 block">
+                Admin Password
+              </label>
+              <input
+                type="password"
+                required
+                value={adminLoginForm.password}
+                onChange={(e) => setAdminLoginForm({ ...adminLoginForm, password: e.target.value })}
+                placeholder="••••••••••••"
+                className="w-full bg-[#0F0F1A] border border-[#3A3A52] text-[#F5F3ED] text-sm rounded-xl px-4 py-3 outline-none focus:border-[#C9A84C] transition placeholder-[#5C5A70]"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={adminLoginLoading}
+              className="w-full py-3.5 rounded-xl bg-[#C9A84C] hover:opacity-90 text-[#0A0A0F] font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-[#C9A84C]/20 transition disabled:opacity-50 cursor-pointer"
+            >
+              {adminLoginLoading ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  <span>Verifying Credentials…</span>
+                </>
+              ) : (
+                <>
+                  <ShieldCheck size={16} />
+                  <span>Authenticate Admin Session</span>
+                </>
+              )}
+            </button>
+          </form>
+
+          <div className="text-center pt-2">
+            <button
+              onClick={() => router.push("/auth/login")}
+              className="text-xs text-[#5C5A70] hover:text-[#A8A6B8] transition cursor-pointer"
+            >
+              Return to Standard Platform Login
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#0A0A0F] text-[#F5F3ED] flex flex-col selection:bg-[#C9A84C] selection:text-[#0A0A0F]">
@@ -620,10 +1084,18 @@ export default function AdminPage() {
 
           <button
             onClick={() => router.push("/dashboard/investor")}
-            className="flex items-center gap-1.5 text-xs font-semibold px-3.5 py-1.5 rounded-xl border border-[#3A3A52] bg-[#1A1A2E] text-[#A8A6B8] hover:text-white hover:border-[#5C5A70] transition"
+            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl border border-[#3A3A52] bg-[#1A1A2E] text-[#A8A6B8] hover:text-white hover:border-[#5C5A70] transition cursor-pointer"
           >
             <span>Exit Admin</span>
             <ExternalLink size={12} />
+          </button>
+
+          <button
+            onClick={handleAdminLogout}
+            className="flex items-center gap-1.5 text-xs font-semibold px-3.5 py-1.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 transition cursor-pointer"
+          >
+            <Lock size={12} />
+            <span>Sign Out</span>
           </button>
         </div>
       </header>
@@ -785,16 +1257,19 @@ export default function AdminPage() {
               </div>
             )}
 
-            {/* 2. KYC & IDENTITY TAB */}
+            {/* 2. KYC & IDENTITY REVIEW TAB */}
             {activeTab === "kyc" && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
+              <div className="space-y-6">
+                <div className="flex items-center justify-between bg-[#1A1A2E] border border-[#3A3A52] rounded-2xl p-5 shadow-xl">
                   <div>
-                    <h2 className="text-lg font-bold text-[#F5F3ED]">KYC & Identity Review</h2>
-                    <p className="text-xs text-[#5C5A70]">Verify founder and investor credentials before unlocking deal privileges</p>
+                    <h2 className="text-lg font-bold text-[#F5F3ED] flex items-center gap-2">
+                      <ShieldCheck size={20} className="text-[#C9A84C]" />
+                      <span>Real-Time KYC & Identity Document Inspection</span>
+                    </h2>
+                    <p className="text-xs text-[#A8A6B8] mt-0.5">Inspect Cloudinary uploaded Front ID, Back ID, Selfie, and Business Cert photos before approving</p>
                   </div>
                   <span className="text-xs px-3 py-1.5 rounded-full bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 font-bold">
-                    {stats.pendingKYC} Requests Awaiting Review
+                    {stats.pendingKYC} Pending Review
                   </span>
                 </div>
 
@@ -805,11 +1280,11 @@ export default function AdminPage() {
                     <p className="text-xs text-[#5C5A70]">There are no pending KYC applications at this time.</p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     {profiles
                       .filter((p) => p.kyc_status === "pending")
-                      .map((user) => (
-                        <div key={user.id} className="bg-[#1A1A2E] border border-[#3A3A52] rounded-2xl p-5 space-y-4 shadow-lg">
+                      .map((user: any) => (
+                        <div key={user.id} className="bg-[#1A1A2E] border border-[#3A3A52] rounded-2xl p-5 space-y-4 shadow-xl">
                           <div className="flex items-start justify-between">
                             <div className="flex items-center gap-3">
                               <div className="w-10 h-10 rounded-full bg-[#C9A84C20] border border-[#3A3A52] flex items-center justify-center font-bold text-[#C9A84C]">
@@ -820,38 +1295,34 @@ export default function AdminPage() {
                                 <p className="text-xs text-[#5C5A70]">@{user.username} · {user.country || "Global"}</p>
                               </div>
                             </div>
-                            <span className="text-[10px] px-2 py-0.5 rounded-md bg-[#2A2A3E] text-[#A8A6B8] border border-[#3A3A52] capitalize">
+                            <span className="text-[10px] px-2 py-0.5 rounded-md bg-[#0F0F1A] text-[#C9A84C] border border-[#3A3A52] uppercase font-bold">
                               {user.role}
                             </span>
                           </div>
 
-                          <div className="p-3 rounded-xl bg-[#0F0F1A] border border-[#3A3A52] text-xs space-y-1">
+                          {/* Submitted Specs */}
+                          <div className="p-3 rounded-xl bg-[#0F0F1A] border border-[#3A3A52] text-xs space-y-1.5">
                             <div className="flex justify-between text-[#A8A6B8]">
-                              <span>Account ID:</span>
-                              <span className="font-mono text-[10px] text-[#5C5A70]">{user.id.slice(0, 12)}…</span>
+                              <span>Document Type:</span>
+                              <span className="font-bold text-[#F5F3ED] capitalize">{user.kyc_id_type?.replace("_", " ") || "Passport/ID"}</span>
                             </div>
                             <div className="flex justify-between text-[#A8A6B8]">
-                              <span>Applied:</span>
-                              <span className="text-[#F5F3ED]">{new Date(user.created_at).toLocaleDateString()}</span>
+                              <span>Photos Submitted:</span>
+                              <span className="text-emerald-400 font-bold">
+                                {[user.kyc_front_url, user.kyc_back_url, user.kyc_selfie_url, user.kyc_business_cert_url].filter(Boolean).length} Cloudinary Images
+                              </span>
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-3 pt-1">
-                            <button
-                              onClick={() => approveKYC(user.id)}
-                              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition shadow-md"
-                            >
-                              <Check size={14} />
-                              <span>Approve & Verify</span>
-                            </button>
-                            <button
-                              onClick={() => rejectKYC(user.id)}
-                              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold bg-red-600/20 hover:bg-red-600/30 border border-red-500/40 text-red-400 transition"
-                            >
-                              <X size={14} />
-                              <span>Reject</span>
-                            </button>
-                          </div>
+                          {/* Document Photo Inspector Trigger */}
+                          <button
+                            type="button"
+                            onClick={() => setRejectingKycUser(user)}
+                            className="w-full py-2.5 rounded-xl bg-[#0F0F1A] border border-[#3A3A52] hover:border-[#C9A84C] text-xs font-bold text-[#C9A84C] flex items-center justify-center gap-2 transition cursor-pointer"
+                          >
+                            <Eye size={16} />
+                            <span>Inspect Uploaded ID Photos & Action</span>
+                          </button>
                         </div>
                       ))}
                   </div>
@@ -946,8 +1417,11 @@ export default function AdminPage() {
               <div className="space-y-4">
                 <div className="flex items-center justify-between flex-wrap gap-3">
                   <div>
-                    <h2 className="text-lg font-bold text-[#F5F3ED]">Platform User Directory</h2>
-                    <p className="text-xs text-[#5C5A70]">Inspect, manage roles, adjust tiers, and export records</p>
+                    <h2 className="text-lg font-bold text-[#F5F3ED] flex items-center gap-2">
+                      <Users className="h-5 w-5 text-[#C9A84C]" />
+                      <span>Platform User Directory & Moderation</span>
+                    </h2>
+                    <p className="text-xs text-[#5C5A70]">Full control: Edit any profile, flag scam accounts, ban/suspend users, adjust trust scores, and delete accounts.</p>
                   </div>
                   <button
                     onClick={exportUsersCSV}
@@ -958,73 +1432,185 @@ export default function AdminPage() {
                   </button>
                 </div>
 
+                {/* Filter Chips Bar */}
+                <div className="flex items-center gap-2 overflow-x-auto [scrollbar-none] pb-1">
+                  {[
+                    { id: "all", label: `All Users (${profiles.length})` },
+                    { id: "investor", label: `Investors (${profiles.filter(p => p.role === 'investor').length})` },
+                    { id: "builder", label: `Builders (${profiles.filter(p => p.role === 'builder').length})` },
+                    { id: "talent", label: `Talent (${profiles.filter(p => p.role === 'talent').length})` },
+                    { id: "scam", label: `⚠️ Scam Flagged (${profiles.filter(p => !!p.is_scam).length})`, color: "border-red-500/40 text-red-400" },
+                    { id: "banned", label: `🚫 Suspended (${profiles.filter(p => !!p.is_banned).length})`, color: "border-zinc-500/40 text-zinc-400" },
+                    { id: "verified", label: `Verified (${profiles.filter(p => !!p.is_verified).length})` },
+                    { id: "pro", label: `Pro/Premium (${profiles.filter(p => (p.subscription_tier || '').toLowerCase() === 'pro' || (p.subscription_tier || '').toLowerCase() === 'premium').length})` },
+                  ].map(f => (
+                    <button
+                      key={f.id}
+                      onClick={() => setUserFilter(f.id)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap border transition ${
+                        userFilter === f.id
+                          ? "bg-[#C9A84C] text-[#0A0A0F] border-[#C9A84C]"
+                          : f.color 
+                          ? `bg-[#1A1A2E] ${f.color} hover:bg-[#2A2A3E]`
+                          : "bg-[#1A1A2E] border-[#3A3A52] text-[#A8A6B8] hover:text-[#F5F3ED] hover:bg-[#2A2A3E]"
+                      }`}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+
                 <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-2xl overflow-hidden shadow-xl">
                   <div className="overflow-x-auto">
                     <table className="w-full text-left text-xs text-[#A8A6B8]">
                       <thead className="bg-[#0F0F1A] border-b border-[#3A3A52] text-[11px] uppercase font-bold text-[#5C5A70]">
                         <tr>
-                          <th className="px-5 py-3.5">User</th>
+                          <th className="px-5 py-3.5">User Identity</th>
                           <th className="px-5 py-3.5">Role</th>
-                          <th className="px-5 py-3.5">Country</th>
+                          <th className="px-5 py-3.5">Country & Trust</th>
                           <th className="px-5 py-3.5">Plan Tier</th>
-                          <th className="px-5 py-3.5">Verified</th>
-                          <th className="px-5 py-3.5">Actions</th>
+                          <th className="px-5 py-3.5">Moderation & Safety</th>
+                          <th className="px-5 py-3.5 text-right">Admin Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-[#3A3A52]/50">
-                        {filteredUsers.map((user) => (
-                          <tr key={user.id} className="hover:bg-[#2A2A3E]/30 transition">
-                            <td className="px-5 py-3.5">
-                              <div className="font-semibold text-[#F5F3ED]">{user.full_name}</div>
-                              <div className="text-[10px] text-[#5C5A70]">@{user.username}</div>
-                            </td>
-                            <td className="px-5 py-3.5">
-                              <select
-                                value={user.role || "investor"}
-                                onChange={(e) => updateUserRole(user.id, e.target.value)}
-                                className="bg-[#0F0F1A] border border-[#3A3A52] text-xs text-[#A8A6B8] rounded-lg px-2 py-1 outline-none capitalize"
-                              >
-                                <option value="investor">Investor</option>
-                                <option value="builder">Builder</option>
-                                <option value="talent">Talent</option>
-                                <option value="admin">Admin</option>
-                              </select>
-                            </td>
-                            <td className="px-5 py-3.5 font-medium">{user.country || "—"}</td>
-                            <td className="px-5 py-3.5">
-                              <select
-                                value={(user.subscription_tier || "free").toLowerCase()}
-                                onChange={(e) => updateUserTier(user.id, e.target.value)}
-                                className={`border border-[#3A3A52] text-xs rounded-lg px-2 py-1 outline-none font-bold bg-[#0F0F1A] ${
-                                  user.subscription_tier === "premium"
-                                    ? "text-purple-400 border-purple-500/40"
-                                    : user.subscription_tier === "pro"
-                                    ? "text-[#C9A84C] border-[#C9A84C]/40"
-                                    : "text-[#5C5A70]"
-                                }`}
-                              >
-                                <option value="free">Free</option>
-                                <option value="pro">Pro ($49)</option>
-                                <option value="premium">Premium ($149)</option>
-                              </select>
-                            </td>
-                            <td className="px-5 py-3.5">
-                              <button
-                                onClick={() => toggleUserVerified(user.id, user.is_verified)}
-                                className={`px-2.5 py-1 rounded-full text-[10px] font-bold border transition ${
-                                  user.is_verified
-                                    ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
-                                    : "bg-[#2A2A3E] border-[#3A3A52] text-[#5C5A70]"
-                                }`}
-                              >
-                                {user.is_verified ? "Verified ✓" : "Unverified"}
-                              </button>
-                            </td>
-                            <td className="px-5 py-3.5">
-                              <span className="text-[10px] text-[#5C5A70] font-mono">{user.id.slice(0, 8)}…</span>
+                        {filteredUsers.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} className="px-5 py-8 text-center text-[#5C5A70]">
+                              No users match the selected filters.
                             </td>
                           </tr>
-                        ))}
+                        ) : (
+                          filteredUsers.map((user) => (
+                            <tr key={user.id} className={`hover:bg-[#2A2A3E]/30 transition ${user.is_scam ? 'bg-red-500/5' : user.is_banned ? 'bg-zinc-500/5' : ''}`}>
+                              <td className="px-5 py-3.5">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-9 h-9 rounded-full bg-[#0A0A0F] border border-[#3A3A52] overflow-hidden flex items-center justify-center shrink-0">
+                                    {user.avatar_url ? (
+                                      <img src={user.avatar_url} alt={user.full_name} className="w-full h-full object-cover" />
+                                    ) : (
+                                      <span className="text-xs font-bold text-[#C9A84C]">
+                                        {user.full_name?.slice(0, 2).toUpperCase() || 'U'}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div>
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="font-bold text-[#F5F3ED]">{user.full_name}</span>
+                                      {user.is_scam && (
+                                        <span className="px-1.5 py-0.2 rounded text-[9px] font-black uppercase bg-red-600/30 text-red-400 border border-red-500/60">
+                                          ⚠️ SCAM
+                                        </span>
+                                      )}
+                                      {user.is_banned && (
+                                        <span className="px-1.5 py-0.2 rounded text-[9px] font-bold uppercase bg-zinc-800 text-zinc-400 border border-zinc-600">
+                                          🚫 BANNED
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="text-[10px] text-[#5C5A70]">@{user.username}</div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-5 py-3.5">
+                                <select
+                                  value={user.role || "investor"}
+                                  onChange={(e) => updateUserRole(user.id, e.target.value)}
+                                  className="bg-[#0F0F1A] border border-[#3A3A52] text-xs text-[#A8A6B8] rounded-lg px-2 py-1 outline-none capitalize focus:border-[#C9A84C]"
+                                >
+                                  <option value="investor">Investor</option>
+                                  <option value="builder">Builder</option>
+                                  <option value="talent">Talent</option>
+                                  <option value="admin">Admin</option>
+                                </select>
+                              </td>
+                              <td className="px-5 py-3.5">
+                                <div className="font-medium text-[#F5F3ED]">{user.country || "—"}</div>
+                                <div className="text-[10px] text-[#C9A84C] flex items-center gap-0.5">
+                                  <Star className="h-2.5 w-2.5 fill-current" />
+                                  <span>Score: {user.trust_score ?? 85}</span>
+                                </div>
+                              </td>
+                              <td className="px-5 py-3.5">
+                                <select
+                                  value={(user.subscription_tier || "free").toLowerCase()}
+                                  onChange={(e) => updateUserTier(user.id, e.target.value)}
+                                  className={`border border-[#3A3A52] text-xs rounded-lg px-2 py-1 outline-none font-bold bg-[#0F0F1A] ${
+                                    user.subscription_tier === "premium"
+                                      ? "text-purple-400 border-purple-500/40"
+                                      : user.subscription_tier === "pro"
+                                      ? "text-[#C9A84C] border-[#C9A84C]/40"
+                                      : "text-[#5C5A70]"
+                                  }`}
+                                >
+                                  <option value="free">Free</option>
+                                  <option value="pro">Pro ($49)</option>
+                                  <option value="premium">Premium ($149)</option>
+                                </select>
+                              </td>
+                              <td className="px-5 py-3.5">
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  {/* Scam Flag Button */}
+                                  <button
+                                    onClick={() => toggleScamStatus(user.id, !!user.is_scam)}
+                                    className={`px-2 py-1 rounded-lg text-[10px] font-bold border transition ${
+                                      user.is_scam
+                                        ? "bg-red-600 text-white border-red-500 shadow-sm"
+                                        : "bg-[#0F0F1A] border-[#3A3A52] text-[#5C5A70] hover:text-red-400 hover:border-red-500/40"
+                                    }`}
+                                    title={user.is_scam ? "Remove Scam Flag" : "Flag as Scam / Fraud"}
+                                  >
+                                    {user.is_scam ? "⚠️ Flagged Scam" : "Flag Scam"}
+                                  </button>
+
+                                  {/* Ban / Suspend Button */}
+                                  <button
+                                    onClick={() => toggleBanStatus(user.id, !!user.is_banned)}
+                                    className={`px-2 py-1 rounded-lg text-[10px] font-bold border transition ${
+                                      user.is_banned
+                                        ? "bg-zinc-800 text-zinc-300 border-zinc-600 shadow-sm"
+                                        : "bg-[#0F0F1A] border-[#3A3A52] text-[#5C5A70] hover:text-yellow-400 hover:border-yellow-500/40"
+                                    }`}
+                                    title={user.is_banned ? "Unsuspend User" : "Suspend / Ban User Account"}
+                                  >
+                                    {user.is_banned ? "🚫 Suspended" : "Suspend"}
+                                  </button>
+
+                                  {/* KYC Verified Button */}
+                                  <button
+                                    onClick={() => toggleUserVerified(user.id, user.is_verified)}
+                                    className={`px-2 py-1 rounded-lg text-[10px] font-bold border transition ${
+                                      user.is_verified
+                                        ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                                        : "bg-[#0F0F1A] border-[#3A3A52] text-[#5C5A70]"
+                                    }`}
+                                    title="Toggle Verification"
+                                  >
+                                    {user.is_verified ? "Verified ✓" : "Unverified"}
+                                  </button>
+                                </div>
+                              </td>
+                              <td className="px-5 py-3.5 text-right">
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <button
+                                    onClick={() => openEditUser(user)}
+                                    className="p-1.5 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-400 hover:bg-blue-500/20 transition"
+                                    title="Edit Full Profile"
+                                  >
+                                    <Edit size={13} />
+                                  </button>
+                                  <button
+                                    onClick={() => deleteUser(user.id, user.full_name)}
+                                    className="p-1.5 rounded-lg bg-red-600/10 border border-red-500/30 text-red-400 hover:bg-red-600/20 transition"
+                                    title="Permanently Delete User"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -1032,69 +1618,163 @@ export default function AdminPage() {
               </div>
             )}
 
-            {/* 5. PROJECTS MANAGEMENT TAB */}
+            {/* 5. ADVANCED PROJECT MODERATION TAB */}
             {activeTab === "projects" && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
+              <div className="space-y-6">
+                <div className="flex items-center justify-between bg-[#1A1A2E] border border-[#3A3A52] rounded-2xl p-5 shadow-xl">
                   <div>
-                    <h2 className="text-lg font-bold text-[#F5F3ED]">Startup Deal Flow & Projects</h2>
-                    <p className="text-xs text-[#5C5A70]">Manage pitch decks, whitepapers, and featured placement</p>
+                    <h2 className="text-lg font-bold text-[#F5F3ED] flex items-center gap-2">
+                      <TrendingUp size={20} className="text-[#C9A84C]" />
+                      <span>Advanced Project Moderation & Listing Controls</span>
+                    </h2>
+                    <p className="text-xs text-[#A8A6B8] mt-0.5">Absolute oversight over startup pitch decks, listing tiers, fraud flags, and feed placement</p>
                   </div>
                 </div>
 
                 {filteredProjects.length === 0 ? (
                   <div className="bg-[#1A1A2E] border border-dashed border-[#3A3A52] rounded-2xl p-12 text-center text-xs text-[#5C5A70]">
-                    No projects found.
+                    No projects found matching criteria.
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {filteredProjects.map((proj) => (
-                      <div key={proj.id} className="bg-[#1A1A2E] border border-[#3A3A52] rounded-2xl p-5 shadow-lg space-y-3">
-                        <div className="flex items-start justify-between">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    {filteredProjects.map((proj: any) => (
+                      <div key={proj.id} className={`bg-[#1A1A2E] border rounded-2xl p-5 shadow-xl space-y-4 transition ${proj.is_fraudulent ? 'border-red-500/50 bg-red-950/10' : 'border-[#3A3A52]'}`}>
+                        <div className="flex items-start justify-between gap-3">
                           <div>
-                            <h3 className="text-base font-bold text-[#F5F3ED]">{proj.title}</h3>
-                            <p className="text-xs text-[#5C5A70]">By {proj.profiles?.full_name || "Founder"} · Sector: {proj.sector || "General"}</p>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h3 className="text-base font-bold text-[#F5F3ED]">{proj.title}</h3>
+                              {proj.is_pinned && (
+                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#C9A84C]/15 border border-[#C9A84C]/30 text-[#C9A84C] font-bold flex items-center gap-1">
+                                  <Pin size={10} /> Pinned
+                                </span>
+                              )}
+                              {proj.is_fraudulent && (
+                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/15 border border-red-500/30 text-red-400 font-bold flex items-center gap-1">
+                                  <AlertTriangle size={10} /> Flagged Fraud
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-[#5C5A70] mt-0.5">
+                              Founder: <span className="text-[#A8A6B8] font-semibold">{proj.profiles?.full_name || "Founder"}</span> (@{proj.profiles?.username || "user"})
+                            </p>
                           </div>
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#C9A84C]/10 border border-[#C9A84C]/30 text-[#C9A84C] font-semibold uppercase">
-                            {proj.category}
-                          </span>
+
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span className={`text-[10px] px-2.5 py-0.5 rounded-full border font-bold uppercase ${
+                              proj.is_published !== false ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400" : "bg-[#0F0F1A] border-[#3A3A52] text-[#5C5A70]"
+                            }`}>
+                              {proj.is_published !== false ? "Published" : "Draft/Hidden"}
+                            </span>
+                          </div>
                         </div>
 
-                        <p className="text-xs text-[#A8A6B8] line-clamp-2 leading-relaxed">{proj.pitch}</p>
+                        {/* Pitch Snippet */}
+                        <p className="text-xs text-[#A8A6B8] line-clamp-2 leading-relaxed">{proj.pitch || proj.description}</p>
 
-                        <div className="flex items-center justify-between border-t border-[#3A3A52]/60 pt-3">
+                        {/* Specs Grid */}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3 rounded-xl bg-[#0F0F1A] border border-[#3A3A52] text-[11px]">
+                          <div>
+                            <span className="text-[#5C5A70] block text-[9px] uppercase">Goal</span>
+                            <span className="font-mono font-bold text-emerald-400">${Number(proj.funding_goal || proj.target_amount || 0).toLocaleString()}</span>
+                          </div>
+                          <div>
+                            <span className="text-[#5C5A70] block text-[9px] uppercase">Sector & Stage</span>
+                            <span className="font-semibold text-[#F5F3ED]">{proj.sector || "Tech"} · {proj.stage || "MVP"}</span>
+                          </div>
+                          <div>
+                            <span className="text-[#5C5A70] block text-[9px] uppercase">Category</span>
+                            <span className="font-bold text-[#C9A84C] uppercase">{proj.category || "web3"}</span>
+                          </div>
+                          <div>
+                            <span className="text-[#5C5A70] block text-[9px] uppercase">Views / Saved</span>
+                            <span className="font-mono text-[#A8A6B8]">{proj.views_count || 0} 👁️ / {proj.bookmarks_count || 0} 🔖</span>
+                          </div>
+                        </div>
+
+                        {/* Admin Action Control Bar */}
+                        <div className="flex items-center justify-between border-t border-[#3A3A52]/60 pt-3 gap-2 flex-wrap">
                           <div className="flex items-center gap-2">
-                            {proj.pitch_deck_url && (
-                              <a
-                                href={proj.pitch_deck_url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="flex items-center gap-1 text-xs text-[#C9A84C] hover:underline"
-                              >
-                                <FileText size={13} />
-                                <span>Pitch Deck</span>
-                              </a>
-                            )}
+                            <label className="text-[10px] text-[#5C5A70]">Tier:</label>
+                            <select
+                              value={proj.tier || "free"}
+                              onChange={async (e) => {
+                                const newTier = e.target.value;
+                                const { data: { session } } = await supabase.auth.getSession();
+                                await fetch("/api/admin/projects", {
+                                  method: "PATCH",
+                                  headers: { "Content-Type": "application/json", ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }) },
+                                  body: JSON.stringify({ projectId: proj.id, updates: { tier: newTier } })
+                                });
+                                showNotification(`Updated project tier to ${newTier.toUpperCase()}! 🌟`);
+                                void fetchAdminData();
+                              }}
+                              className="bg-[#0F0F1A] border border-[#3A3A52] text-[10px] font-bold text-[#C9A84C] rounded-lg px-2 py-1 outline-none focus:border-[#C9A84C]"
+                            >
+                              <option value="free">Free Tier</option>
+                              <option value="pro">Pro Listing</option>
+                              <option value="premium">Premium ⭐</option>
+                            </select>
                           </div>
 
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <button
-                              onClick={() => toggleProjectFeatured(proj.id, !!proj.is_featured)}
-                              className={`px-3 py-1 rounded-lg text-xs font-bold border transition ${
-                                proj.is_featured
-                                  ? "bg-[#C9A84C] text-[#0A0A0F] border-[#C9A84C]"
-                                  : "bg-[#0F0F1A] text-[#5C5A70] border-[#3A3A52] hover:text-white"
+                              onClick={async () => {
+                                const { data: { session } } = await supabase.auth.getSession();
+                                await fetch("/api/admin/projects", {
+                                  method: "PATCH",
+                                  headers: { "Content-Type": "application/json", ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }) },
+                                  body: JSON.stringify({ projectId: proj.id, updates: { is_pinned: !proj.is_pinned } })
+                                });
+                                showNotification(proj.is_pinned ? "Unpinned project" : "Pinned project to top! 📌");
+                                void fetchAdminData();
+                              }}
+                              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition cursor-pointer ${
+                                proj.is_pinned ? "bg-[#C9A84C] text-[#0A0A0F] border-[#C9A84C]" : "bg-[#0F0F1A] text-[#A8A6B8] border-[#3A3A52] hover:text-white"
                               }`}
                             >
-                              {proj.is_featured ? "Featured ⭐" : "Feature"}
+                              {proj.is_pinned ? "Pinned 📌" : "Pin Feed"}
+                            </button>
+
+                            <button
+                              onClick={async () => {
+                                const { data: { session } } = await supabase.auth.getSession();
+                                await fetch("/api/admin/projects", {
+                                  method: "PATCH",
+                                  headers: { "Content-Type": "application/json", ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }) },
+                                  body: JSON.stringify({ projectId: proj.id, updates: { is_fraudulent: !proj.is_fraudulent } })
+                                });
+                                showNotification(proj.is_fraudulent ? "Cleared fraud status" : "Flagged project as FRAUDULENT! ⚠️");
+                                void fetchAdminData();
+                              }}
+                              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition cursor-pointer ${
+                                proj.is_fraudulent ? "bg-red-600 text-white border-red-500" : "bg-red-500/10 text-red-400 border-red-500/30 hover:bg-red-500/20"
+                              }`}
+                            >
+                              {proj.is_fraudulent ? "Fraud Flagged ⚠️" : "Flag Fraud"}
+                            </button>
+
+                            <button
+                              onClick={async () => {
+                                const { data: { session } } = await supabase.auth.getSession();
+                                await fetch("/api/admin/projects", {
+                                  method: "PATCH",
+                                  headers: { "Content-Type": "application/json", ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }) },
+                                  body: JSON.stringify({ projectId: proj.id, updates: { is_published: proj.is_published === false ? true : false } })
+                                });
+                                showNotification(proj.is_published === false ? "Project Published!" : "Project Unpublished");
+                                void fetchAdminData();
+                              }}
+                              className="px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-[#0F0F1A] border border-[#3A3A52] text-[#A8A6B8] hover:text-white transition cursor-pointer"
+                            >
+                              {proj.is_published === false ? "Publish" : "Unpublish"}
                             </button>
 
                             <button
                               onClick={() => deleteProject(proj.id)}
-                              className="p-1.5 rounded-lg bg-red-600/10 hover:bg-red-600/20 text-red-400 border border-red-500/20 transition"
+                              className="p-1 rounded-lg bg-red-600/10 hover:bg-red-600/20 text-red-400 border border-red-500/20 transition cursor-pointer"
                               title="Delete Project"
                             >
-                              <Trash2 size={14} />
+                              <Trash2 size={13} />
                             </button>
                           </div>
                         </div>
@@ -1236,7 +1916,621 @@ export default function AdminPage() {
               </div>
             )}
 
-            {/* 8. SYSTEM ARCHITECTURE & DOCUMENTATION TAB */}
+            {/* 5. DEAL MONITORING & COMMISSION TAB */}
+            {activeTab === "deals" && (
+              <div className="space-y-6">
+                <div className="flex items-center justify-between bg-[#1A1A2E] border border-[#3A3A52] rounded-2xl p-5 shadow-xl">
+                  <div>
+                    <h2 className="text-lg font-bold text-[#F5F3ED] flex items-center gap-2">
+                      <DollarSign size={20} className="text-[#C9A84C]" />
+                      <span>Deal Monitoring & Pipeline Control</span>
+                    </h2>
+                    <p className="text-xs text-[#A8A6B8] mt-0.5">Real-time visibility into active investment deals, stages, and 3% platform commission dues</p>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      const csv = "data:text/csv;charset=utf-8," + ["Investor,Project,Deal Size,Stage,Commission Due,Commission Status,Date"].join(",") + "\n" + deals.map(d => [d.investor?.full_name || 'N/A', d.project?.title || 'N/A', d.amount || 0, d.stage || 'N/A', d.commission_amount || 0, d.commission_status || 'pending', d.created_at || ''].join(",")).join("\n");
+                      const link = document.createElement("a");
+                      link.setAttribute("href", encodeURI(csv));
+                      link.setAttribute("download", `deals_export_${new Date().toISOString().split("T")[0]}.csv`);
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                    }}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#0F0F1A] border border-[#3A3A52] text-xs font-semibold text-[#A8A6B8] hover:text-white transition cursor-pointer"
+                  >
+                    <Download size={14} />
+                    <span>Export CSV</span>
+                  </button>
+                </div>
+
+                <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-2xl overflow-hidden shadow-xl">
+                  {deals.length === 0 ? (
+                    <div className="py-16 text-center text-[#5C5A70] text-xs space-y-2">
+                      <DollarSign size={24} className="mx-auto text-[#3A3A52]" />
+                      <p>No active investment deals recorded in pipeline yet.</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-[#0F0F1A] border-b border-[#3A3A52] text-[#A8A6B8] uppercase tracking-wider text-[10px]">
+                          <tr>
+                            <th className="py-3 px-4">Investor</th>
+                            <th className="py-3 px-4">Target Project</th>
+                            <th className="py-3 px-4">Deal Size</th>
+                            <th className="py-3 px-4">Pipeline Stage</th>
+                            <th className="py-3 px-4">3% Commission</th>
+                            <th className="py-3 px-4">Payment Status</th>
+                            <th className="py-3 px-4 text-right">Admin Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[#3A3A52]/60 text-[#F5F3ED]">
+                          {deals.map((deal: any) => (
+                            <tr key={deal.id} className="hover:bg-[#2A2A3E]/40 transition">
+                              <td className="py-3.5 px-4 font-semibold">
+                                {deal.investor?.full_name || "Investor"}
+                                {deal.investor?.username && <div className="text-[10px] text-[#5C5A70]">@{deal.investor.username}</div>}
+                              </td>
+                              <td className="py-3.5 px-4 text-[#C9A84C] font-medium">
+                                {deal.project?.title || "Project"}
+                              </td>
+                              <td className="py-3.5 px-4 font-mono font-bold text-emerald-400">
+                                ${Number(deal.amount || 0).toLocaleString()} {deal.currency || "USD"}
+                              </td>
+                              <td className="py-3.5 px-4">
+                                <select
+                                  value={deal.stage || "nda"}
+                                  onChange={async (e) => {
+                                    const newStage = e.target.value;
+                                    const { data: { session } } = await supabase.auth.getSession();
+                                    await fetch("/api/admin/deals", {
+                                      method: "POST",
+                                      headers: { "Content-Type": "application/json", ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }) },
+                                      body: JSON.stringify({ dealId: deal.id, action: "update_stage", stage: newStage })
+                                    });
+                                    showNotification(`Advanced deal stage to ${newStage.toUpperCase()}! 🚀`);
+                                    void fetchAdminData();
+                                  }}
+                                  className="bg-[#0F0F1A] border border-[#3A3A52] text-[10px] font-bold text-[#F5F3ED] rounded-lg px-2 py-1 outline-none focus:border-[#C9A84C] cursor-pointer"
+                                >
+                                  <option value="nda">1. NDA Signed 📑</option>
+                                  <option value="term_sheet">2. Term Sheet 📜</option>
+                                  <option value="agreement">3. Agreement 📝</option>
+                                  <option value="closed">4. Closed Deal 🎉</option>
+                                </select>
+                              </td>
+                              <td className="py-3.5 px-4 font-mono font-bold text-[#F5F3ED]">
+                                ${Number(deal.commission_amount || (deal.amount * 0.03)).toLocaleString()}
+                              </td>
+                              <td className="py-3.5 px-4">
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold capitalize ${
+                                  deal.commission_status === "paid" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30" : "bg-amber-500/10 text-amber-400 border border-amber-500/30"
+                                }`}>
+                                  {deal.commission_status || "pending"}
+                                </span>
+                              </td>
+                              <td className="py-3.5 px-4 text-right space-x-2">
+                                <button
+                                  onClick={async () => {
+                                    const { data: { session } } = await supabase.auth.getSession();
+                                    await fetch("/api/admin/deals", {
+                                      method: "POST",
+                                      headers: { "Content-Type": "application/json", ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }) },
+                                      body: JSON.stringify({ dealId: deal.id, action: "update_commission", commissionStatus: "paid" })
+                                    });
+                                    showNotification("Marked commission as PAID! 💳");
+                                    void fetchAdminData();
+                                  }}
+                                  className="px-2.5 py-1 rounded-lg bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-400 border border-emerald-500/20 text-[10px] font-semibold transition cursor-pointer"
+                                >
+                                  Mark Paid
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* 6. COMMISSION INVOICES TAB */}
+            {activeTab === "invoices" && (
+              <div className="space-y-6">
+                <div className="flex items-center justify-between bg-[#1A1A2E] border border-[#3A3A52] rounded-2xl p-5 shadow-xl">
+                  <div>
+                    <h2 className="text-lg font-bold text-[#F5F3ED] flex items-center gap-2">
+                      <Receipt size={20} className="text-[#C9A84C]" />
+                      <span>Commission Invoice Management Vault</span>
+                    </h2>
+                    <p className="text-xs text-[#A8A6B8] mt-0.5">Manage closed deal invoices, track overdue balances, send reminders, and waive fees</p>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      const csv = "data:text/csv;charset=utf-8," + ["Investor,Project,Deal Amount,Commission,Status,Due Date"].join(",") + "\n" + invoices.map(i => [i.investor?.full_name || 'N/A', i.project?.title || 'N/A', i.deal_amount || 0, i.commission_amount || 0, i.status || 'pending', i.due_date || ''].join(",")).join("\n");
+                      const link = document.createElement("a");
+                      link.setAttribute("href", encodeURI(csv));
+                      link.setAttribute("download", `invoices_export_${new Date().toISOString().split("T")[0]}.csv`);
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                    }}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#0F0F1A] border border-[#3A3A52] text-xs font-semibold text-[#A8A6B8] hover:text-white transition cursor-pointer"
+                  >
+                    <Download size={14} />
+                    <span>Export Invoices CSV</span>
+                  </button>
+                </div>
+
+                <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-2xl overflow-hidden shadow-xl">
+                  {invoices.length === 0 ? (
+                    <div className="py-16 text-center text-[#5C5A70] text-xs space-y-2">
+                      <Receipt size={24} className="mx-auto text-[#3A3A52]" />
+                      <p>No commission invoices recorded.</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-[#0F0F1A] border-b border-[#3A3A52] text-[#A8A6B8] uppercase tracking-wider text-[10px]">
+                          <tr>
+                            <th className="py-3 px-4">Invoice ID</th>
+                            <th className="py-3 px-4">Investor</th>
+                            <th className="py-3 px-4">Deal Amount</th>
+                            <th className="py-3 px-4">Commission Due</th>
+                            <th className="py-3 px-4">Status</th>
+                            <th className="py-3 px-4 text-right">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[#3A3A52]/60 text-[#F5F3ED]">
+                          {invoices.map((inv: any) => (
+                            <tr key={inv.id} className="hover:bg-[#2A2A3E]/40 transition">
+                              <td className="py-3.5 px-4 font-mono text-[11px] text-[#A8A6B8]">
+                                #{inv.id.slice(0, 8)}
+                              </td>
+                              <td className="py-3.5 px-4 font-semibold">
+                                {inv.investor?.full_name || "Investor"}
+                              </td>
+                              <td className="py-3.5 px-4 font-mono font-bold text-emerald-400">
+                                ${Number(inv.deal_amount || 0).toLocaleString()}
+                              </td>
+                              <td className="py-3.5 px-4 font-mono font-bold text-[#C9A84C]">
+                                ${Number(inv.commission_amount || 0).toLocaleString()}
+                              </td>
+                              <td className="py-3.5 px-4">
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold capitalize ${
+                                  inv.status === "paid" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30" : inv.status === "waived" ? "bg-purple-500/10 text-purple-400 border border-purple-500/30" : "bg-amber-500/10 text-amber-400 border border-amber-500/30"
+                                }`}>
+                                  {inv.status || "pending"}
+                                </span>
+                              </td>
+                              <td className="py-3.5 px-4 text-right space-x-2">
+                                <button
+                                  onClick={async () => {
+                                    const { data: { session } } = await supabase.auth.getSession();
+                                    await fetch("/api/admin/invoices", {
+                                      method: "POST",
+                                      headers: { "Content-Type": "application/json", ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }) },
+                                      body: JSON.stringify({ invoiceId: inv.id, action: "send_reminder", investorId: inv.investor_id })
+                                    });
+                                    showNotification("Payment reminder sent to investor! 📩");
+                                  }}
+                                  className="px-2 py-1 rounded-lg bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 border border-blue-500/20 text-[10px] font-semibold transition cursor-pointer"
+                                >
+                                  Remind
+                                </button>
+                                <button
+                                  onClick={async () => {
+                                    const { data: { session } } = await supabase.auth.getSession();
+                                    await fetch("/api/admin/invoices", {
+                                      method: "POST",
+                                      headers: { "Content-Type": "application/json", ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }) },
+                                      body: JSON.stringify({ invoiceId: inv.id, action: "update_status", status: "paid" })
+                                    });
+                                    showNotification("Invoice marked as PAID! 💳");
+                                    void fetchAdminData();
+                                  }}
+                                  className="px-2 py-1 rounded-lg bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-400 border border-emerald-500/20 text-[10px] font-semibold transition cursor-pointer"
+                                >
+                                  Mark Paid
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* 7. MESSAGE MONITORING & MODERATION CENTER */}
+            {activeTab === "messages" && (
+              <div className="space-y-6">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-[#1A1A2E] border border-[#3A3A52] rounded-2xl p-5 shadow-xl">
+                  <div>
+                    <h2 className="text-lg font-bold text-[#F5F3ED] flex items-center gap-2">
+                      <AlertCircle size={20} className="text-[#C9A84C]" />
+                      <span>Direct Messages & Communication Moderation</span>
+                    </h2>
+                    <p className="text-xs text-[#A8A6B8] mt-0.5">Audit flagged messages, inspect platform conversation threads read-only, issue warnings, and enforce safety</p>
+                  </div>
+
+                  {/* Sub-tab Toggle */}
+                  <div className="flex items-center gap-1.5 p-1 rounded-xl bg-[#0F0F1A] border border-[#3A3A52]">
+                    <button
+                      onClick={() => setMsgSubTab("flagged")}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                        msgSubTab === "flagged" ? "bg-[#C9A84C] text-[#0A0A0F]" : "text-[#A8A6B8] hover:text-white"
+                      }`}
+                    >
+                      🚩 Flagged Queue ({flaggedMessages.length})
+                    </button>
+                    <button
+                      onClick={() => setMsgSubTab("all")}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                        msgSubTab === "all" ? "bg-[#C9A84C] text-[#0A0A0F]" : "text-[#A8A6B8] hover:text-white"
+                      }`}
+                    >
+                      💬 All Conversations ({conversations.length})
+                    </button>
+                  </div>
+                </div>
+
+                {/* Sub-Tab 1: Flagged Queue */}
+                {msgSubTab === "flagged" && (
+                  <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-2xl overflow-hidden shadow-xl">
+                    {flaggedMessages.length === 0 ? (
+                      <div className="py-16 text-center text-[#5C5A70] text-xs space-y-2">
+                        <ShieldCheck size={28} className="mx-auto text-emerald-500/40" />
+                        <p className="text-sm font-semibold text-[#F5F3ED]">No Flagged Messages Pending</p>
+                        <p>No direct messages have triggered moderation warnings or user reports.</p>
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-[#3A3A52]/60">
+                        {flaggedMessages.map((flag: any) => (
+                          <div key={flag.id} className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-[#2A2A3E]/40 transition">
+                            <div className="space-y-1.5">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold text-[#C9A84C]">Flag Reason: {flag.reason}</span>
+                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/10 border border-red-500/30 text-red-400 font-semibold">
+                                  {flag.status || "pending"}
+                                </span>
+                              </div>
+                              <p className="text-xs text-[#F5F3ED] font-mono bg-[#0F0F1A] border border-[#3A3A52] rounded-xl p-3 max-w-2xl">
+                                "{flag.message?.content || 'Message content unavailable'}"
+                              </p>
+                              <div className="text-[11px] text-[#5C5A70]">
+                                Sender: <span className="text-[#A8A6B8] font-semibold">{flag.message?.sender?.full_name || 'User'}</span> · Reported by: <span className="text-[#A8A6B8]">{flag.reporter?.full_name || 'System'}</span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <button
+                                onClick={async () => {
+                                  const { data: { session } } = await supabase.auth.getSession();
+                                  await fetch("/api/admin/messages", {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json", ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }) },
+                                    body: JSON.stringify({ flagId: flag.id, targetUserId: flag.message?.sender?.id, action: "warn_user", warningReason: flag.reason })
+                                  });
+                                  showNotification("Official moderation warning issued to sender! ⚠️");
+                                  void fetchAdminData();
+                                }}
+                                className="px-2.5 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 text-xs font-semibold transition cursor-pointer"
+                              >
+                                Warn User
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  const { data: { session } } = await supabase.auth.getSession();
+                                  await fetch("/api/admin/messages", {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json", ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }) },
+                                    body: JSON.stringify({ flagId: flag.id, messageId: flag.message_id, action: "delete_message" })
+                                  });
+                                  showNotification("Flagged message deleted! 🗑️");
+                                  void fetchAdminData();
+                                }}
+                                className="px-2.5 py-1.5 rounded-xl bg-red-600/10 hover:bg-red-600/20 text-red-400 border border-red-500/20 text-xs font-semibold transition cursor-pointer"
+                              >
+                                Delete Message
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  const { data: { session } } = await supabase.auth.getSession();
+                                  await fetch("/api/admin/messages", {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json", ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }) },
+                                    body: JSON.stringify({ flagId: flag.id, action: "dismiss_flag" })
+                                  });
+                                  showNotification("Flag dismissed.");
+                                  void fetchAdminData();
+                                }}
+                                className="px-2.5 py-1.5 rounded-xl bg-[#0F0F1A] border border-[#3A3A52] text-[#A8A6B8] hover:text-white text-xs font-semibold transition cursor-pointer"
+                              >
+                                Dismiss
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Sub-Tab 2: All Conversations Read-Only Thread Viewer */}
+                {msgSubTab === "all" && (
+                  <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-2xl overflow-hidden shadow-xl">
+                    {conversations.length === 0 ? (
+                      <div className="py-16 text-center text-[#5C5A70] text-xs space-y-2">
+                        <MessageSquare size={28} className="mx-auto text-[#3A3A52]" />
+                        <p className="text-sm font-semibold text-[#F5F3ED]">No Active Conversations</p>
+                        <p>No direct message threads exist between users yet.</p>
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-[#3A3A52]/60">
+                        {conversations.map((conv: any) => {
+                          const p1 = conv.participant1 || { full_name: "User 1" };
+                          const p2 = conv.participant2 || { full_name: "User 2" };
+                          const msgCount = (conv.messages || []).length;
+                          const lastMsg = conv.messages && conv.messages.length > 0 ? conv.messages[conv.messages.length - 1] : null;
+
+                          return (
+                            <div key={conv.id} className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-[#2A2A3E]/40 transition">
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-bold text-[#F5F3ED]">
+                                    {p1.full_name} <span className="text-[#5C5A70] text-xs font-normal">(@{p1.username || 'user'})</span>
+                                  </span>
+                                  <span className="text-xs text-[#C9A84C] font-bold">⇄</span>
+                                  <span className="text-sm font-bold text-[#F5F3ED]">
+                                    {p2.full_name} <span className="text-[#5C5A70] text-xs font-normal">(@{p2.username || 'user'})</span>
+                                  </span>
+                                </div>
+
+                                {lastMsg ? (
+                                  <p className="text-xs text-[#A8A6B8] line-clamp-1 font-mono bg-[#0F0F1A] border border-[#3A3A52]/60 rounded-lg px-2.5 py-1.5 w-fit">
+                                    "{lastMsg.content}"
+                                  </p>
+                                ) : (
+                                  <p className="text-xs text-[#5C5A70]">No messages sent yet</p>
+                                )}
+
+                                <div className="text-[10px] text-[#5C5A70]">
+                                  {msgCount} messages in thread · Last active: {conv.updated_at ? new Date(conv.updated_at).toLocaleDateString() : 'Recent'}
+                                </div>
+                              </div>
+
+                              <button
+                                onClick={() => setInspectingConversation(conv)}
+                                className="px-3.5 py-2 rounded-xl bg-[#0F0F1A] border border-[#3A3A52] text-xs font-bold text-[#C9A84C] hover:bg-[#C9A84C] hover:text-[#0A0A0F] transition cursor-pointer flex items-center gap-1.5 shrink-0"
+                              >
+                                <Eye size={14} />
+                                <span>Inspect Thread</span>
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 8. REFERRAL NETWORK TAB */}
+            {activeTab === "referrals" && (
+              <div className="space-y-6">
+                <div className="flex items-center justify-between bg-[#1A1A2E] border border-[#3A3A52] rounded-2xl p-5 shadow-xl">
+                  <div>
+                    <h2 className="text-lg font-bold text-[#F5F3ED] flex items-center gap-2">
+                      <Share2 size={20} className="text-[#C9A84C]" />
+                      <span>Referral Network & Leaderboard</span>
+                    </h2>
+                    <p className="text-xs text-[#A8A6B8] mt-0.5">Track user referral trees, status progression, top referrers, and commission credits</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {/* Top Referrers Leaderboard */}
+                  <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-2xl p-5 space-y-4 shadow-xl">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-[#C9A84C] flex items-center gap-2">
+                      <Award size={16} />
+                      <span>Top Referrers Leaderboard</span>
+                    </h3>
+
+                    {topReferrers.length === 0 ? (
+                      <p className="text-xs text-[#5C5A70]">No referrers active yet.</p>
+                    ) : (
+                      <div className="space-y-2.5">
+                        {topReferrers.map((ref: any, idx: number) => (
+                          <div key={ref.id} className="p-3 rounded-xl bg-[#0F0F1A] border border-[#3A3A52] flex items-center justify-between text-xs">
+                            <div className="flex items-center gap-2.5">
+                              <span className="w-5 h-5 rounded-full bg-[#C9A84C]/15 text-[#C9A84C] font-bold text-[10px] flex items-center justify-center">
+                                #{idx + 1}
+                              </span>
+                              <span className="font-bold text-[#F5F3ED]">{ref.full_name}</span>
+                            </div>
+                            <span className="font-mono text-[#C9A84C] font-bold">{ref.referral_count || 0} Invites</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Referral Relationships Table */}
+                  <div className="lg:col-span-2 bg-[#1A1A2E] border border-[#3A3A52] rounded-2xl overflow-hidden shadow-xl">
+                    {referrals.length === 0 ? (
+                      <div className="py-16 text-center text-[#5C5A70] text-xs space-y-2">
+                        <Share2 size={24} className="mx-auto text-[#3A3A52]" />
+                        <p>No referral links generated yet.</p>
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs">
+                          <thead className="bg-[#0F0F1A] border-b border-[#3A3A52] text-[#A8A6B8] uppercase tracking-wider text-[10px]">
+                            <tr>
+                              <th className="py-3 px-4">Referrer</th>
+                              <th className="py-3 px-4">Referred User</th>
+                              <th className="py-3 px-4">Status</th>
+                              <th className="py-3 px-4 text-right">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-[#3A3A52]/60 text-[#F5F3ED]">
+                            {referrals.map((r: any) => (
+                              <tr key={r.id} className="hover:bg-[#2A2A3E]/40 transition">
+                                <td className="py-3 px-4 font-semibold">{r.referrer?.full_name || 'Referrer'}</td>
+                                <td className="py-3 px-4 text-[#A8A6B8]">{r.referred?.full_name || 'Referred'}</td>
+                                <td className="py-3 px-4">
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold capitalize bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                                    {r.status || 'signed_up'}
+                                  </span>
+                                </td>
+                                <td className="py-3 px-4 text-right">
+                                  <button
+                                    onClick={async () => {
+                                      const { data: { session } } = await supabase.auth.getSession();
+                                      await fetch("/api/admin/referrals", {
+                                        method: "POST",
+                                        headers: { "Content-Type": "application/json", ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }) },
+                                        body: JSON.stringify({ referralId: r.id, action: "update_status", status: "rewarded" })
+                                      });
+                                      showNotification("Triggered referral reward! 🎁");
+                                      void fetchAdminData();
+                                    }}
+                                    className="px-2 py-1 rounded-lg bg-[#C9A84C] text-[#0A0A0F] font-bold text-[10px] cursor-pointer"
+                                  >
+                                    Trigger Reward
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 9. BROADCAST CENTER TAB */}
+            {activeTab === "broadcast" && (
+              <div className="max-w-3xl mx-auto space-y-6">
+                <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-2xl p-6 shadow-xl space-y-5">
+                  <div className="border-b border-[#3A3A52] pb-4">
+                    <h2 className="text-lg font-bold text-[#F5F3ED] flex items-center gap-2">
+                      <Megaphone size={20} className="text-[#C9A84C]" />
+                      <span>Platform Broadcast & Announcement Dispatcher</span>
+                    </h2>
+                    <p className="text-xs text-[#A8A6B8] mt-0.5">Send instant platform-wide announcements or targeted push notifications to specific user roles</p>
+                  </div>
+
+                  <form
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      setSendingBroadcast(true);
+                      try {
+                        const { data: { session } } = await supabase.auth.getSession();
+                        const res = await fetch("/api/admin/broadcast", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json", ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }) },
+                          body: JSON.stringify(broadcastForm),
+                        });
+                        const json = await res.json();
+                        if (res.ok) {
+                          showNotification(`Dispatched announcement to ${json.count || 0} users! 📢`);
+                          setBroadcastForm({ target: "all", userId: "", title: "", body: "", actionUrl: "" });
+                        } else {
+                          showNotification(`Error: ${json.error}`);
+                        }
+                      } catch {
+                        showNotification("Broadcast dispatch failed");
+                      } finally {
+                        setSendingBroadcast(false);
+                      }
+                    }}
+                    className="space-y-4"
+                  >
+                    <div>
+                      <label className="text-xs font-semibold text-[#A8A6B8] mb-1.5 block">Target Audience</label>
+                      <select
+                        value={broadcastForm.target}
+                        onChange={(e) => setBroadcastForm({ ...broadcastForm, target: e.target.value })}
+                        className="w-full bg-[#0F0F1A] border border-[#3A3A52] text-xs text-[#F5F3ED] rounded-xl px-4 py-3 outline-none focus:border-[#C9A84C] transition"
+                      >
+                        <option value="all">🌍 All Registered Platform Users</option>
+                        <option value="investors">💼 Investors Only</option>
+                        <option value="builders">🛠️ Builders / Founders Only</option>
+                        <option value="user">🎯 Specific User ID</option>
+                      </select>
+                    </div>
+
+                    {broadcastForm.target === "user" && (
+                      <div>
+                        <label className="text-xs font-semibold text-[#A8A6B8] mb-1.5 block">Target User ID (UUID)</label>
+                        <input
+                          type="text"
+                          required
+                          value={broadcastForm.userId}
+                          onChange={(e) => setBroadcastForm({ ...broadcastForm, userId: e.target.value })}
+                          placeholder="e.g. 123e4567-e89b-12d3-a456-426614174000"
+                          className="w-full bg-[#0F0F1A] border border-[#3A3A52] text-xs text-[#F5F3ED] rounded-xl px-4 py-3 outline-none focus:border-[#C9A84C] transition font-mono"
+                        />
+                      </div>
+                    )}
+
+                    <div>
+                      <label className="text-xs font-semibold text-[#A8A6B8] mb-1.5 block">Notification Title</label>
+                      <input
+                        type="text"
+                        required
+                        value={broadcastForm.title}
+                        onChange={(e) => setBroadcastForm({ ...broadcastForm, title: e.target.value })}
+                        placeholder="e.g. Platform Upgrade & New Features Live!"
+                        className="w-full bg-[#0F0F1A] border border-[#3A3A52] text-xs text-[#F5F3ED] rounded-xl px-4 py-3 outline-none focus:border-[#C9A84C] transition"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-semibold text-[#A8A6B8] mb-1.5 block">Message Body</label>
+                      <textarea
+                        required
+                        rows={4}
+                        value={broadcastForm.body}
+                        onChange={(e) => setBroadcastForm({ ...broadcastForm, body: e.target.value })}
+                        placeholder="Write detailed announcement content here..."
+                        className="w-full bg-[#0F0F1A] border border-[#3A3A52] text-xs text-[#F5F3ED] rounded-xl p-4 outline-none focus:border-[#C9A84C] transition"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-semibold text-[#A8A6B8] mb-1.5 block">Action URL (Optional)</label>
+                      <input
+                        type="text"
+                        value={broadcastForm.actionUrl}
+                        onChange={(e) => setBroadcastForm({ ...broadcastForm, actionUrl: e.target.value })}
+                        placeholder="e.g. /dashboard/community"
+                        className="w-full bg-[#0F0F1A] border border-[#3A3A52] text-xs text-[#F5F3ED] rounded-xl px-4 py-3 outline-none focus:border-[#C9A84C] transition"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={sendingBroadcast}
+                      className="w-full py-3.5 rounded-xl bg-[#C9A84C] hover:opacity-90 text-[#0A0A0F] font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer disabled:opacity-50"
+                    >
+                      {sendingBroadcast ? <Loader2 size={16} className="animate-spin" /> : <><Send size={16} /> Dispatch Broadcast</>}
+                    </button>
+                  </form>
+                </div>
+              </div>
+            )}
             {activeTab === "docs" && (
               <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-2xl p-6 shadow-xl space-y-6">
                 <div>
@@ -1284,8 +2578,727 @@ export default function AdminPage() {
                 </div>
               </div>
             )}
+
+            {/* 9. UNIVERSAL AUDIT & ACTIVITY VAULT TAB */}
+            {activeTab === "audit" && (
+              <div className="space-y-6">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-[#1A1A2E] border border-[#3A3A52] rounded-2xl p-5 shadow-xl">
+                  <div>
+                    <h2 className="text-lg font-bold text-[#F5F3ED] flex items-center gap-2">
+                      <ShieldAlert size={20} className="text-[#C9A84C]" />
+                      <span>Universal Platform Audit Vault</span>
+                      <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-semibold">
+                        PIN Protected
+                      </span>
+                    </h2>
+                    <p className="text-xs text-[#A8A6B8] mt-0.5">
+                      Real-time security telemetry and activity recording across all Admins and Platform Users
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => setShowPasscodeModal(true)}
+                      className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#0F0F1A] border border-[#3A3A52] text-xs font-semibold text-[#A8A6B8] hover:text-white hover:border-[#C9A84C] transition cursor-pointer"
+                    >
+                      <KeyRound size={14} className="text-[#C9A84C]" />
+                      <span>Change Access Code</span>
+                    </button>
+                  </div>
+                </div>
+
+                {!auditUnlocked ? (
+                  /* PIN Pad Lock Overlay */
+                  <div className="max-w-md mx-auto bg-[#1A1A2E] border border-[#C9A84C]/30 rounded-3xl p-6 sm:p-8 text-center space-y-6 shadow-2xl my-8">
+                    <div className="w-16 h-16 rounded-2xl bg-[#C9A84C]/10 border border-[#C9A84C]/30 flex items-center justify-center mx-auto text-[#C9A84C]">
+                      <Lock size={30} />
+                    </div>
+
+                    <div className="space-y-1">
+                      <h3 className="text-lg font-bold text-[#F5F3ED]">
+                        Security Audit Passcode Required
+                      </h3>
+                      <p className="text-xs text-[#A8A6B8]">
+                        Enter master security access code to unlock universal audit logs
+                      </p>
+                    </div>
+
+                    {auditPasscodeError && (
+                      <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs font-medium">
+                        {auditPasscodeError}
+                      </div>
+                    )}
+
+                    <form onSubmit={handleVerifyPasscode} className="space-y-4">
+                      <input
+                        type="password"
+                        maxLength={12}
+                        value={auditPasscode}
+                        onChange={(e) => setAuditPasscode(e.target.value)}
+                        placeholder="Enter access code (Default: 779933)"
+                        className="w-full bg-[#0F0F1A] border border-[#3A3A52] text-center text-[#F5F3ED] text-lg tracking-widest font-mono rounded-xl px-4 py-3 outline-none focus:border-[#C9A84C] transition placeholder-[#5C5A70]"
+                      />
+
+                      <button
+                        type="submit"
+                        disabled={verifyingPasscode || !auditPasscode}
+                        className="w-full py-3.5 rounded-xl bg-[#C9A84C] hover:opacity-90 text-[#0A0A0F] font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-[#C9A84C]/20 transition disabled:opacity-50 cursor-pointer"
+                      >
+                        {verifyingPasscode ? (
+                          <Loader2 size={16} className="animate-spin" />
+                        ) : (
+                          <>
+                            <KeyRound size={16} />
+                            <span>Unlock Audit Vault</span>
+                          </>
+                        )}
+                      </button>
+                    </form>
+                  </div>
+                ) : (
+                  /* Unlocked Audit Log Table & Telemetry */
+                  <div className="space-y-4">
+                    {/* Filters Bar */}
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-[#1A1A2E] border border-[#3A3A52] rounded-2xl p-4">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {[
+                          { id: "all", label: "All Telemetry" },
+                          { id: "admin", label: "Admin Actions" },
+                          { id: "user", label: "User Activity" },
+                          { id: "security", label: "Security Alerts" },
+                        ].map((f) => (
+                          <button
+                            key={f.id}
+                            onClick={() => {
+                              setAuditFilter(f.id);
+                              fetchAuditLogs(auditPasscode);
+                            }}
+                            className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
+                              auditFilter === f.id
+                                ? "bg-[#C9A84C] text-[#0A0A0F] shadow-md shadow-[#C9A84C]/20"
+                                : "bg-[#0F0F1A] border border-[#3A3A52] text-[#A8A6B8] hover:text-white"
+                            }`}
+                          >
+                            {f.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="relative w-full sm:w-64">
+                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#5C5A70]" />
+                        <input
+                          type="text"
+                          value={auditSearch}
+                          onChange={(e) => setAuditSearch(e.target.value)}
+                          onKeyDown={(e) => e.key === "Enter" && fetchAuditLogs(auditPasscode)}
+                          placeholder="Search IP, User, Action..."
+                          className="w-full bg-[#0F0F1A] border border-[#3A3A52] text-xs text-[#F5F3ED] rounded-xl pl-9 pr-3 py-2 outline-none focus:border-[#C9A84C] transition"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Logs Table */}
+                    <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-2xl overflow-hidden shadow-xl">
+                      {loadingAuditLogs ? (
+                        <div className="py-16 flex flex-col items-center justify-center gap-3 text-[#A8A6B8]">
+                          <Loader2 size={24} className="animate-spin text-[#C9A84C]" />
+                          <span className="text-xs font-medium">Fetching real-time platform telemetry…</span>
+                        </div>
+                      ) : auditLogs.length === 0 ? (
+                        <div className="py-16 text-center text-[#5C5A70] text-xs space-y-2">
+                          <Activity size={24} className="mx-auto text-[#3A3A52]" />
+                          <p>No activity logs recorded matching criteria.</p>
+                        </div>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-xs">
+                            <thead className="bg-[#0F0F1A] border-b border-[#3A3A52] text-[#A8A6B8] uppercase tracking-wider text-[10px]">
+                              <tr>
+                                <th className="py-3 px-4">Timestamp</th>
+                                <th className="py-3 px-4">Actor / User</th>
+                                <th className="py-3 px-4">Role</th>
+                                <th className="py-3 px-4">Event / Action</th>
+                                <th className="py-3 px-4">Description</th>
+                                <th className="py-3 px-4">Device & IP</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-[#3A3A52]/60 text-[#F5F3ED]">
+                              {auditLogs.map((log: any) => (
+                                <tr key={log.id} className="hover:bg-[#2A2A3E]/40 transition">
+                                  <td className="py-3 px-4 text-[#A8A6B8] font-mono whitespace-nowrap text-[11px]">
+                                    {new Date(log.created_at).toLocaleString()}
+                                  </td>
+                                  <td className="py-3 px-4 font-semibold">
+                                    {log.actor_name || "System"}
+                                    {log.actor_email && <div className="text-[10px] text-[#5C5A70]">{log.actor_email}</div>}
+                                  </td>
+                                  <td className="py-3 px-4">
+                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold capitalize ${
+                                      log.actor_role === "admin" ? "bg-amber-500/10 text-amber-400 border border-amber-500/30" : "bg-blue-500/10 text-blue-400 border border-blue-500/30"
+                                    }`}>
+                                      {log.actor_role || "user"}
+                                    </span>
+                                  </td>
+                                  <td className="py-3 px-4 font-mono font-bold text-[#C9A84C] text-[11px]">
+                                    {log.action_type}
+                                  </td>
+                                  <td className="py-3 px-4 text-[#A8A6B8] max-w-xs truncate">
+                                    {log.description}
+                                  </td>
+                                  <td className="py-3 px-4 font-mono text-[11px] text-[#5C5A70]">
+                                    <div>{log.ip_address || "127.0.0.1"}</div>
+                                    {log.user_agent && (
+                                      <div className="text-[9px] truncate max-w-[120px]" title={log.user_agent}>
+                                        {log.user_agent.split(" ")[0]}
+                                      </div>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </>
         )}
+
+        {/* ── KYC DOCUMENT PHOTO INSPECTOR & REJECTION MODAL ── */}
+        {rejectingKycUser && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+            <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-3xl w-full max-w-3xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+              
+              {/* Modal Header */}
+              <div className="p-5 border-b border-[#3A3A52] bg-[#0A0A0F] flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-[#C9A84C]/10 border border-[#C9A84C]/30 flex items-center justify-center text-[#C9A84C]">
+                    <ShieldCheck size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-[#F5F3ED] flex items-center gap-2">
+                      <span>KYC Document Inspector</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#C9A84C]/10 border border-[#C9A84C]/30 text-[#C9A84C] font-bold uppercase">
+                        {(rejectingKycUser as any).kyc_id_type?.replace("_", " ") || "Passport/ID"}
+                      </span>
+                    </h3>
+                    <p className="text-xs text-[#5C5A70]">
+                      User: {rejectingKycUser.full_name} (@{rejectingKycUser.username}) · Role: <span className="uppercase text-[#F5F3ED]">{rejectingKycUser.role}</span>
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => {
+                    setRejectingKycUser(null);
+                    setKycRejectionReason("");
+                  }}
+                  className="p-2 rounded-xl bg-[#1A1A2E] border border-[#3A3A52] text-[#A8A6B8] hover:text-[#F5F3ED] transition cursor-pointer"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Uploaded Document Lightbox Grid */}
+              <div className="flex-1 p-5 overflow-y-auto space-y-4 bg-[#0F0F1A]">
+                <h4 className="text-xs font-bold text-[#A8A6B8] uppercase tracking-wider">Cloudinary Uploaded ID Document Photos</h4>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Front ID */}
+                  <div className="p-3.5 rounded-2xl bg-[#1A1A2E] border border-[#3A3A52] space-y-2">
+                    <span className="text-xs font-bold text-[#F5F3ED] block">1. Front ID Image</span>
+                    {(rejectingKycUser as any).kyc_front_url ? (
+                      <a href={(rejectingKycUser as any).kyc_front_url} target="_blank" rel="noreferrer" className="block relative h-44 rounded-xl overflow-hidden border border-[#3A3A52] hover:border-[#C9A84C] transition group">
+                        <img src={(rejectingKycUser as any).kyc_front_url} alt="Front ID" className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-xs font-bold text-white transition">
+                          View High-Res ↗
+                        </div>
+                      </a>
+                    ) : (
+                      <div className="h-44 rounded-xl bg-[#0F0F1A] border border-dashed border-[#3A3A52] flex items-center justify-center text-xs text-[#5C5A70]">Not Uploaded</div>
+                    )}
+                  </div>
+
+                  {/* Back ID */}
+                  <div className="p-3.5 rounded-2xl bg-[#1A1A2E] border border-[#3A3A52] space-y-2">
+                    <span className="text-xs font-bold text-[#F5F3ED] block">2. Back ID Image</span>
+                    {(rejectingKycUser as any).kyc_back_url ? (
+                      <a href={(rejectingKycUser as any).kyc_back_url} target="_blank" rel="noreferrer" className="block relative h-44 rounded-xl overflow-hidden border border-[#3A3A52] hover:border-[#C9A84C] transition group">
+                        <img src={(rejectingKycUser as any).kyc_back_url} alt="Back ID" className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-xs font-bold text-white transition">
+                          View High-Res ↗
+                        </div>
+                      </a>
+                    ) : (
+                      <div className="h-44 rounded-xl bg-[#0F0F1A] border border-dashed border-[#3A3A52] flex items-center justify-center text-xs text-[#5C5A70]">Not Uploaded (Optional)</div>
+                    )}
+                  </div>
+
+                  {/* Selfie Photo */}
+                  <div className="p-3.5 rounded-2xl bg-[#1A1A2E] border border-[#3A3A52] space-y-2">
+                    <span className="text-xs font-bold text-[#F5F3ED] block">3. Selfie Photo</span>
+                    {(rejectingKycUser as any).kyc_selfie_url ? (
+                      <a href={(rejectingKycUser as any).kyc_selfie_url} target="_blank" rel="noreferrer" className="block relative h-44 rounded-xl overflow-hidden border border-[#3A3A52] hover:border-[#C9A84C] transition group">
+                        <img src={(rejectingKycUser as any).kyc_selfie_url} alt="Selfie" className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-xs font-bold text-white transition">
+                          View High-Res ↗
+                        </div>
+                      </a>
+                    ) : (
+                      <div className="h-44 rounded-xl bg-[#0F0F1A] border border-dashed border-[#3A3A52] flex items-center justify-center text-xs text-[#5C5A70]">Not Uploaded</div>
+                    )}
+                  </div>
+
+                  {/* Business Cert */}
+                  <div className="p-3.5 rounded-2xl bg-[#1A1A2E] border border-[#3A3A52] space-y-2">
+                    <span className="text-xs font-bold text-[#C9A84C] block">4. Business Cert (Builders)</span>
+                    {(rejectingKycUser as any).kyc_business_cert_url ? (
+                      <a href={(rejectingKycUser as any).kyc_business_cert_url} target="_blank" rel="noreferrer" className="block relative h-44 rounded-xl overflow-hidden border border-[#3A3A52] hover:border-[#C9A84C] transition group">
+                        <img src={(rejectingKycUser as any).kyc_business_cert_url} alt="Business Cert" className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-xs font-bold text-white transition">
+                          View High-Res ↗
+                        </div>
+                      </a>
+                    ) : (
+                      <div className="h-44 rounded-xl bg-[#0F0F1A] border border-dashed border-[#3A3A52] flex items-center justify-center text-xs text-[#5C5A70]">Not Uploaded (Founders Only)</div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Rejection Note Box */}
+                <div className="pt-2">
+                  <label className="text-xs font-bold text-[#A8A6B8] block mb-1.5">Optional Rejection Reason Feedback (Sent to user email)</label>
+                  <textarea
+                    rows={2}
+                    value={kycRejectionReason}
+                    onChange={(e) => setKycRejectionReason(e.target.value)}
+                    placeholder="e.g. Front ID photo was blurry. Please resubmit a clear photo."
+                    className="w-full bg-[#1A1A2E] border border-[#3A3A52] rounded-xl p-3 text-xs text-[#F5F3ED] outline-none focus:border-red-500 leading-relaxed"
+                  />
+                </div>
+              </div>
+
+              {/* Action Footer */}
+              <div className="p-4 border-t border-[#3A3A52] bg-[#0A0A0F] flex items-center justify-between gap-4">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await rejectKYC(rejectingKycUser.id);
+                    setRejectingKycUser(null);
+                    setKycRejectionReason("");
+                  }}
+                  className="px-5 py-2.5 rounded-xl bg-red-600/20 hover:bg-red-600/30 border border-red-500/40 text-red-400 text-xs font-bold transition cursor-pointer"
+                >
+                  Decline KYC Submission
+                </button>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await approveKYC(rejectingKycUser.id);
+                    setRejectingKycUser(null);
+                    setKycRejectionReason("");
+                  }}
+                  className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition shadow-lg cursor-pointer"
+                >
+                  ✓ Approve KYC & Issue Verification Checkmark
+                </button>
+              </div>
+
+            </div>
+          </div>
+        )}
+
+        {/* ── PASSCODE SETTINGS MODAL ── */}
+        {showPasscodeModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+            <div className="w-full max-w-md bg-[#1A1A2E] border border-[#3A3A52] rounded-3xl p-6 space-y-5 shadow-2xl relative">
+              <div className="flex items-center justify-between border-b border-[#3A3A52] pb-4">
+                <div className="flex items-center gap-2 text-sm font-bold text-[#F5F3ED]">
+                  <KeyRound size={18} className="text-[#C9A84C]" />
+                  <span>Configure Security Access Code</span>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowPasscodeModal(false);
+                    setPasscodeChangeMsg(null);
+                  }}
+                  className="text-[#5C5A70] hover:text-[#F5F3ED] transition"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="text-xs text-[#A8A6B8] leading-relaxed">
+                The Master Security Access Code protects the Universal Audit Vault. You can configure your custom passcode in your environment variables:
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-[#0F0F1A] border border-[#3A3A52] text-xs font-mono space-y-1.5">
+                <div className="text-[#5C5A70]"># In .env.local file:</div>
+                <div className="text-[#C9A84C]">ADMIN_ACCESS_CODE=779933</div>
+              </div>
+
+              <p className="text-xs text-[#5C5A70]">
+                To change your passcode, update <code className="text-[#F5F3ED]">ADMIN_ACCESS_CODE</code> in your environment file or deployment dashboard.
+              </p>
+
+              <button
+                onClick={() => setShowPasscodeModal(false)}
+                className="w-full py-3 rounded-xl bg-[#0F0F1A] hover:bg-[#2A2A3E] border border-[#3A3A52] text-[#F5F3ED] font-bold text-xs transition cursor-pointer"
+              >
+                Close Settings
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── USER PROFILE EDITOR MODAL ── */}
+        {editingUser && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+            <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-3xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+              
+              {/* Modal Header */}
+              <div className="p-5 border-b border-[#3A3A52] bg-[#0A0A0F] flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-[#C9A84C]/10 border border-[#C9A84C]/30 flex items-center justify-center text-[#C9A84C]">
+                    <Edit size={18} />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-[#F5F3ED]">
+                      Edit User Profile: {editingUser.full_name}
+                    </h3>
+                    <p className="text-xs text-[#5C5A70]">ID: {editingUser.id}</p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setEditingUser(null)}
+                  className="p-2 rounded-xl bg-[#1A1A2E] border border-[#3A3A52] text-[#A8A6B8] hover:text-[#F5F3ED] transition"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Modal Body Form */}
+              <div className="flex-1 p-5 sm:p-6 overflow-y-auto space-y-5 bg-[#0F0F1A]">
+                
+                {/* Name & Username */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-semibold text-[#A8A6B8] block mb-1.5">Full Name</label>
+                    <input
+                      type="text"
+                      value={editFormData.full_name || ""}
+                      onChange={(e) => setEditFormData({ ...editFormData, full_name: e.target.value })}
+                      className="w-full bg-[#1A1A2E] border border-[#3A3A52] rounded-xl px-3.5 py-2.5 text-xs text-[#F5F3ED] outline-none focus:border-[#C9A84C]"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-[#A8A6B8] block mb-1.5">Username</label>
+                    <input
+                      type="text"
+                      value={editFormData.username || ""}
+                      onChange={(e) => setEditFormData({ ...editFormData, username: e.target.value })}
+                      className="w-full bg-[#1A1A2E] border border-[#3A3A52] rounded-xl px-3.5 py-2.5 text-xs text-[#F5F3ED] outline-none focus:border-[#C9A84C]"
+                    />
+                  </div>
+                </div>
+
+                {/* Role & Plan Tier */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-semibold text-[#A8A6B8] block mb-1.5">Platform Role</label>
+                    <select
+                      value={editFormData.role || "investor"}
+                      onChange={(e) => setEditFormData({ ...editFormData, role: e.target.value })}
+                      className="w-full bg-[#1A1A2E] border border-[#3A3A52] rounded-xl px-3.5 py-2.5 text-xs text-[#F5F3ED] outline-none focus:border-[#C9A84C] capitalize"
+                    >
+                      <option value="investor">Investor</option>
+                      <option value="builder">Builder</option>
+                      <option value="talent">Talent (Job Seeker)</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-[#A8A6B8] block mb-1.5">Subscription Tier</label>
+                    <select
+                      value={editFormData.subscription_tier || "free"}
+                      onChange={(e) => setEditFormData({ ...editFormData, subscription_tier: e.target.value })}
+                      className="w-full bg-[#1A1A2E] border border-[#3A3A52] rounded-xl px-3.5 py-2.5 text-xs text-[#F5F3ED] outline-none focus:border-[#C9A84C] font-bold"
+                    >
+                      <option value="free">Free Tier</option>
+                      <option value="pro">Pro Plan</option>
+                      <option value="premium">Premium Plan</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Country & Trust Score */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-semibold text-[#A8A6B8] block mb-1.5">Country / Region</label>
+                    <input
+                      type="text"
+                      value={editFormData.country || ""}
+                      onChange={(e) => setEditFormData({ ...editFormData, country: e.target.value })}
+                      placeholder="e.g. United States, Nigeria, UK"
+                      className="w-full bg-[#1A1A2E] border border-[#3A3A52] rounded-xl px-3.5 py-2.5 text-xs text-[#F5F3ED] outline-none focus:border-[#C9A84C]"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-[#A8A6B8] block mb-1.5">Trust Score (0 - 100)</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={editFormData.trust_score ?? 85}
+                        onChange={(e) => setEditFormData({ ...editFormData, trust_score: parseInt(e.target.value) || 0 })}
+                        className="w-24 bg-[#1A1A2E] border border-[#3A3A52] rounded-xl px-3.5 py-2.5 text-xs font-bold text-[#C9A84C] outline-none focus:border-[#C9A84C]"
+                      />
+                      <div className="flex gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setEditFormData({ ...editFormData, trust_score: 0 })}
+                          className="px-2 py-1 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-[10px] font-bold hover:bg-red-500/20"
+                        >
+                          0 (Scam)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditFormData({ ...editFormData, trust_score: 85 })}
+                          className="px-2 py-1 rounded-lg bg-[#1A1A2E] border border-[#3A3A52] text-[#A8A6B8] text-[10px] font-bold hover:text-white"
+                        >
+                          85 (Normal)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditFormData({ ...editFormData, trust_score: 100 })}
+                          className="px-2 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] font-bold hover:bg-emerald-500/20"
+                        >
+                          100 (Max)
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bio / Description */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-semibold text-[#A8A6B8]">Bio & Summary</label>
+                    <button
+                      type="button"
+                      onClick={() => setEditFormData({ ...editFormData, bio: "" })}
+                      className="text-[10px] text-red-400 hover:underline"
+                    >
+                      Clear / Reset Bio
+                    </button>
+                  </div>
+                  <textarea
+                    rows={3}
+                    value={editFormData.bio || ""}
+                    onChange={(e) => setEditFormData({ ...editFormData, bio: e.target.value })}
+                    placeholder="User profile bio..."
+                    className="w-full bg-[#1A1A2E] border border-[#3A3A52] rounded-xl p-3 text-xs text-[#F5F3ED] outline-none focus:border-[#C9A84C] leading-relaxed"
+                  />
+                </div>
+
+                {/* Safety & Moderation Flags Section */}
+                <div className="p-4 rounded-2xl bg-[#1A1A2E] border border-[#3A3A52] space-y-3">
+                  <h4 className="text-xs font-bold text-[#F5F3ED] uppercase tracking-wider flex items-center gap-1.5">
+                    <ShieldAlert size={14} className="text-red-400" />
+                    <span>Safety, Verification & Account Moderation</span>
+                  </h4>
+
+                  <div className="space-y-2.5 pt-1">
+                    {/* SCAM FLAG */}
+                    <label className="flex items-start gap-3 p-2.5 rounded-xl bg-[#0A0A0F] border border-red-500/30 cursor-pointer hover:border-red-500 transition">
+                      <input
+                        type="checkbox"
+                        checked={!!editFormData.is_scam}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setEditFormData({
+                            ...editFormData,
+                            is_scam: checked,
+                            ...(checked ? { trust_score: 0, is_verified: false } : { trust_score: 85 })
+                          });
+                        }}
+                        className="mt-0.5 h-4 w-4 rounded accent-red-500"
+                      />
+                      <div>
+                        <div className="text-xs font-bold text-red-400">⚠️ Flag as SCAM / Fraud Alert</div>
+                        <div className="text-[11px] text-[#A8A6B8]">
+                          Displays a prominent red SCAM ALERT warning banner on this user's profile and across chats, deal rooms, and talent directories.
+                        </div>
+                      </div>
+                    </label>
+
+                    {/* BAN / SUSPEND */}
+                    <label className="flex items-start gap-3 p-2.5 rounded-xl bg-[#0A0A0F] border border-zinc-600/50 cursor-pointer hover:border-yellow-500 transition">
+                      <input
+                        type="checkbox"
+                        checked={!!editFormData.is_banned}
+                        onChange={(e) => setEditFormData({ ...editFormData, is_banned: e.target.checked })}
+                        className="mt-0.5 h-4 w-4 rounded accent-yellow-500"
+                      />
+                      <div>
+                        <div className="text-xs font-bold text-zinc-300">🚫 Suspend / Ban User Account</div>
+                        <div className="text-[11px] text-[#A8A6B8]">
+                          Prevents user from posting jobs, applying, creating projects, or messaging other members.
+                        </div>
+                      </div>
+                    </label>
+
+                    {/* VERIFIED KYC */}
+                    <label className="flex items-start gap-3 p-2.5 rounded-xl bg-[#0A0A0F] border border-[#3A3A52] cursor-pointer hover:border-emerald-500 transition">
+                      <input
+                        type="checkbox"
+                        checked={!!editFormData.is_verified}
+                        onChange={(e) => setEditFormData({ ...editFormData, is_verified: e.target.checked })}
+                        className="mt-0.5 h-4 w-4 rounded accent-emerald-500"
+                      />
+                      <div>
+                        <div className="text-xs font-bold text-emerald-400">✓ Verified Identity (KYC Approved)</div>
+                        <div className="text-[11px] text-[#A8A6B8]">
+                          Grants official verification checkmark badge on user profile.
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Modal Footer */}
+              <div className="p-4 sm:p-5 border-t border-[#3A3A52] bg-[#0A0A0F] flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => setEditingUser(null)}
+                  className="px-4 py-2 rounded-xl bg-[#1A1A2E] border border-[#3A3A52] text-[#A8A6B8] hover:text-[#F5F3ED] text-xs font-semibold transition"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSaveUserEdit}
+                  disabled={savingEdit}
+                  className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[#C9A84C] hover:bg-[#D4B55D] text-[#0A0A0F] text-xs font-bold transition shadow-lg shadow-[#C9A84C]/25 disabled:opacity-50"
+                >
+                  {savingEdit ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Saving Changes…</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check size={15} />
+                      <span>Save All Changes</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+            </div>
+          </div>
+        )}
+
+        {/* ── READ-ONLY CONVERSATION THREAD INSPECTOR MODAL ── */}
+        {inspectingConversation && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+            <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-3xl w-full max-w-3xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+              
+              {/* Modal Header */}
+              <div className="p-5 border-b border-[#3A3A52] bg-[#0A0A0F] flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-[#C9A84C]/10 border border-[#C9A84C]/30 flex items-center justify-center text-[#C9A84C]">
+                    <MessageSquare size={18} />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-[#F5F3ED] flex items-center gap-2">
+                      <span>Thread Inspector (Read-Only)</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-400 font-semibold uppercase">
+                        Admin Audit Mode
+                      </span>
+                    </h3>
+                    <p className="text-xs text-[#5C5A70]">
+                      Between {inspectingConversation.participant1?.full_name || 'User 1'} and {inspectingConversation.participant2?.full_name || 'User 2'}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setInspectingConversation(null)}
+                  className="p-2 rounded-xl bg-[#1A1A2E] border border-[#3A3A52] text-[#A8A6B8] hover:text-[#F5F3ED] transition cursor-pointer"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Thread Messages Stream */}
+              <div className="flex-1 p-5 overflow-y-auto space-y-3 bg-[#0F0F1A]">
+                {!inspectingConversation.messages || inspectingConversation.messages.length === 0 ? (
+                  <p className="text-center text-xs text-[#5C5A70] py-8">No messages recorded in this conversation thread.</p>
+                ) : (
+                  inspectingConversation.messages.map((msg: any) => (
+                    <div key={msg.id} className="p-4 rounded-2xl bg-[#1A1A2E] border border-[#3A3A52] space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-[#F5F3ED]">{msg.sender?.full_name || 'Sender'}</span>
+                          <span className="text-[10px] text-[#5C5A70]">@{msg.sender?.username || 'user'}</span>
+                          <span className="text-[10px] text-[#5C5A70] font-mono">{msg.created_at ? new Date(msg.created_at).toLocaleTimeString() : ''}</span>
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={async () => {
+                              const { data: { session } } = await supabase.auth.getSession();
+                              await fetch("/api/admin/messages", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json", ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }) },
+                                body: JSON.stringify({ messageId: msg.id, action: "delete_message" })
+                              });
+                              showNotification("Deleted message from thread! 🗑️");
+                              setInspectingConversation({
+                                ...inspectingConversation,
+                                messages: inspectingConversation.messages.filter((m: any) => m.id !== msg.id)
+                              });
+                              void fetchAdminData();
+                            }}
+                            className="px-2 py-1 rounded-lg bg-red-600/10 hover:bg-red-600/20 text-red-400 border border-red-500/20 text-[10px] font-semibold transition cursor-pointer"
+                          >
+                            Delete Message
+                          </button>
+                        </div>
+                      </div>
+
+                      <p className="text-xs text-[#F5F3ED] font-mono leading-relaxed whitespace-pre-wrap">
+                        {msg.content}
+                      </p>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="p-4 border-t border-[#3A3A52] bg-[#0A0A0F] flex items-center justify-end">
+                <button
+                  onClick={() => setInspectingConversation(null)}
+                  className="px-5 py-2 rounded-xl bg-[#1A1A2E] border border-[#3A3A52] text-[#A8A6B8] hover:text-[#F5F3ED] text-xs font-semibold transition cursor-pointer"
+                >
+                  Close Thread Inspector
+                </button>
+              </div>
+
+            </div>
+          </div>
+        )}
+
       </main>
     </div>
   );

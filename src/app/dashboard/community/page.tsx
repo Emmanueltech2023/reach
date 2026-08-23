@@ -11,6 +11,8 @@ import {
   MessageSquare, MoreHorizontal, ArrowLeft, Maximize2
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import TierBadge from "@/components/TierBadge";
+import VerifiedBadge from "@/components/VerifiedBadge";
 
 type Post = {
   id: string;
@@ -41,10 +43,12 @@ type Comment = {
   is_anonymous: boolean;
   created_at: string;
   profiles: {
+    id?: string;
     full_name: string;
     username: string;
     is_verified: boolean;
     avatar_url: string | null;
+    subscription_tier?: string;
     role?: string;
   } | null;
 };
@@ -101,6 +105,7 @@ export default function CommunityPage() {
     username: string;
     role: string;
     subscription_tier: string;
+    is_verified?: boolean;
     avatar_url?: string | null;
   } | null>(null);
   
@@ -142,7 +147,7 @@ export default function CommunityPage() {
         if (user) {
           const { data: prof } = await supabase
             .from("profiles")
-            .select("id, full_name, username, role, subscription_tier, avatar_url")
+            .select("id, full_name, username, role, subscription_tier, avatar_url, is_verified")
             .eq("id", user.id)
             .single();
           if (prof) setProfile(prof);
@@ -366,7 +371,8 @@ export default function CommunityPage() {
     return posts.filter((p) => p.category === activeCategory);
   }, [posts, activeCategory]);
 
-  const isPremium = profile?.subscription_tier === "premium" || profile?.subscription_tier === "pro";
+  const normalizedTier = (profile?.subscription_tier || "free").toLowerCase().trim();
+  const isPremium = normalizedTier === "premium" || normalizedTier === "pro";
 
   // Post Detail Thread View
   if (selectedPost) {
@@ -380,71 +386,75 @@ export default function CommunityPage() {
         fullName={profile?.full_name}
         username={profile?.username}
       >
-        <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
+        <div className="max-w-3xl mx-auto px-2.5 sm:px-4 py-4 sm:py-6 space-y-4 sm:space-y-6">
           {/* Back Navigation Bar */}
           <div className="flex items-center justify-between">
             <button
               onClick={() => { setSelectedPost(null); setComments([]); }}
-              className="flex items-center gap-2 text-sm text-[#A8A6B8] hover:text-[#F5F3ED] transition px-3 py-1.5 rounded-lg bg-[#1A1A2E] border border-[#3A3A52]"
+              className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-[#A8A6B8] hover:text-[#F5F3ED] transition px-2.5 sm:px-3 py-1.5 rounded-lg bg-[#1A1A2E] border border-[#3A3A52]"
             >
-              <ArrowLeft size={16} />
+              <ArrowLeft size={15} />
               <span>Back to Feed</span>
             </button>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2">
               <button
                 onClick={(e) => sharePost(selectedPost.id, e)}
-                className="p-2 text-[#A8A6B8] hover:text-[#C9A84C] hover:bg-[#1A1A2E] rounded-lg transition border border-transparent hover:border-[#3A3A52]"
+                className="p-1.5 sm:p-2 text-[#A8A6B8] hover:text-[#C9A84C] hover:bg-[#1A1A2E] rounded-lg transition border border-transparent hover:border-[#3A3A52]"
                 title="Share link"
               >
-                <Share2 size={16} />
+                <Share2 size={15} />
               </button>
               <button
                 onClick={(e) => toggleBookmark(selectedPost.id, e)}
-                className="p-2 text-[#A8A6B8] hover:text-[#C9A84C] hover:bg-[#1A1A2E] rounded-lg transition border border-transparent hover:border-[#3A3A52]"
+                className="p-1.5 sm:p-2 text-[#A8A6B8] hover:text-[#C9A84C] hover:bg-[#1A1A2E] rounded-lg transition border border-transparent hover:border-[#3A3A52]"
                 title="Bookmark"
               >
-                {isBookmarked ? <BookmarkCheck size={16} className="text-[#C9A84C]" /> : <Bookmark size={16} />}
+                {isBookmarked ? <BookmarkCheck size={15} className="text-[#C9A84C]" /> : <Bookmark size={15} />}
               </button>
             </div>
           </div>
 
           {/* Main Thread Card */}
-          <article className="bg-[#1A1A2E] border border-[#3A3A52] rounded-2xl p-6 shadow-xl space-y-4">
+          <article className="bg-[#1A1A2E] border border-[#3A3A52] rounded-xl sm:rounded-2xl p-3.5 sm:p-6 shadow-xl space-y-3 sm:space-y-4">
             {/* Author Row */}
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#C9A84C20] to-[#1A1A2E] border border-[#3A3A52] flex items-center justify-center text-base font-bold text-[#C9A84C] overflow-hidden shrink-0">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gradient-to-br from-[#C9A84C20] to-[#1A1A2E] border border-[#3A3A52] flex items-center justify-center text-sm sm:text-base font-bold text-[#C9A84C] overflow-hidden shrink-0">
                   {selectedPost.is_anonymous ? (
-                    <EyeOff size={20} className="text-purple-400" />
+                    <EyeOff size={18} className="text-purple-400" />
                   ) : selectedPost.profiles?.avatar_url ? (
                     <img src={selectedPost.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
                   ) : (
                     selectedPost.profiles?.full_name?.[0]?.toUpperCase() || "?"
                   )}
                 </div>
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-semibold text-base text-[#F5F3ED]">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="font-semibold text-sm sm:text-base text-[#F5F3ED] truncate">
                       {selectedPost.is_anonymous ? "Anonymous Member" : selectedPost.profiles?.full_name || "Community Member"}
                     </span>
-                    {!selectedPost.is_anonymous && selectedPost.profiles?.is_verified && (
-                      <CheckCircle size={15} className="text-emerald-400 fill-emerald-400/20" />
+                    {!selectedPost.is_anonymous && (
+                      <VerifiedBadge 
+                        tier={selectedPost.profiles?.subscription_tier} 
+                        isVerified={selectedPost.profiles?.is_verified} 
+                        size={14} 
+                      />
                     )}
                     {!selectedPost.is_anonymous && selectedPost.profiles?.role && (
-                      <span className="text-[11px] px-2 py-0.5 rounded-md bg-[#2A2A3E] text-[#A8A6B8] border border-[#3A3A52] capitalize font-medium">
+                      <span className="text-[10px] sm:text-[11px] px-1.5 sm:px-2 py-0.2 sm:py-0.5 rounded-md bg-[#2A2A3E] text-[#A8A6B8] border border-[#3A3A52] capitalize font-medium">
                         {selectedPost.profiles.role}
                       </span>
                     )}
                   </div>
-                  <div className="text-xs text-[#5C5A70] flex items-center gap-2 mt-0.5">
-                    <span>@{selectedPost.is_anonymous ? "anonymous" : selectedPost.profiles?.username || "user"}</span>
+                  <div className="text-[11px] sm:text-xs text-[#5C5A70] flex items-center gap-1.5 mt-0.5">
+                    <span className="truncate">@{selectedPost.is_anonymous ? "anonymous" : selectedPost.profiles?.username || "user"}</span>
                     <span>·</span>
-                    <span>{timeAgo(selectedPost.created_at)}</span>
+                    <span className="shrink-0">{timeAgo(selectedPost.created_at)}</span>
                   </div>
                 </div>
               </div>
 
-              <span className={`text-xs px-3 py-1 rounded-full border capitalize font-medium flex items-center gap-1.5 ${style.badge}`}>
+              <span className={`text-[10px] sm:text-xs px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full border capitalize font-medium shrink-0 flex items-center gap-1 sm:gap-1.5 ${style.badge}`}>
                 <span className={`w-1.5 h-1.5 rounded-full ${style.dot}`} />
                 {selectedPost.category}
               </span>
@@ -452,11 +462,11 @@ export default function CommunityPage() {
 
             {/* Title & Body Content */}
             {selectedPost.title && (
-              <h1 className="text-xl font-bold text-[#F5F3ED] tracking-tight pt-1">
+              <h1 className="text-base sm:text-xl font-bold text-[#F5F3ED] tracking-tight pt-1">
                 {selectedPost.title}
               </h1>
             )}
-            <p className="text-[#D8D6E2] text-base leading-relaxed whitespace-pre-wrap">
+            <p className="text-[#D8D6E2] text-xs sm:text-base leading-relaxed whitespace-pre-wrap">
               {selectedPost.content}
             </p>
 
@@ -464,59 +474,59 @@ export default function CommunityPage() {
             {selectedPost.image_url && (
               <div 
                 onClick={() => setPreviewImageModal(selectedPost.image_url)}
-                className="relative mt-4 rounded-2xl border border-[#3A3A52] overflow-hidden bg-black/60 cursor-pointer group shadow-2xl transition hover:border-[#C9A84C]/50"
+                className="relative mt-2 sm:mt-4 rounded-xl sm:rounded-2xl border border-[#3A3A52] overflow-hidden bg-black/60 cursor-pointer group shadow-2xl transition hover:border-[#C9A84C]/50"
               >
                 <img
                   src={selectedPost.image_url}
                   alt="Post attachment"
-                  className="w-full max-h-[580px] object-contain mx-auto transition duration-300 group-hover:scale-[1.01]"
+                  className="w-full max-h-[360px] sm:max-h-[580px] object-contain mx-auto transition duration-300 group-hover:scale-[1.01]"
                 />
-                <div className="absolute bottom-3 right-3 bg-black/70 backdrop-blur-sm px-3 py-1.5 rounded-lg text-xs font-medium text-[#F5F3ED] flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition shadow-lg">
-                  <Maximize2 size={13} className="text-[#C9A84C]" />
-                  <span>Click to expand full image</span>
+                <div className="absolute bottom-2.5 right-2.5 bg-black/70 backdrop-blur-sm px-2.5 py-1 rounded-lg text-[10px] sm:text-xs font-medium text-[#F5F3ED] flex items-center gap-1 sm:gap-1.5 opacity-0 group-hover:opacity-100 transition shadow-lg">
+                  <Maximize2 size={12} className="text-[#C9A84C]" />
+                  <span>Expand image</span>
                 </div>
               </div>
             )}
 
             {/* Engagement Stats Bar */}
-            <div className="flex items-center justify-between border-t border-b border-[#3A3A52]/60 py-3.5 mt-4 text-sm text-[#A8A6B8]">
-              <div className="flex items-center gap-8">
+            <div className="flex items-center justify-between border-t border-b border-[#3A3A52]/60 py-2.5 sm:py-3.5 mt-2 sm:mt-4 text-xs sm:text-sm text-[#A8A6B8] flex-wrap gap-2">
+              <div className="flex items-center gap-4 sm:gap-8">
                 <button
                   onClick={() => toggleLike(selectedPost.id)}
-                  className={`flex items-center gap-2 text-sm font-medium transition ${
+                  className={`flex items-center gap-1.5 text-xs sm:text-sm font-medium transition ${
                     isLiked ? "text-red-400" : "text-[#A8A6B8] hover:text-red-400"
                   }`}
                 >
-                  <Heart size={18} className={isLiked ? "fill-red-400 text-red-400 scale-110 transition-transform" : ""} />
+                  <Heart size={16} className={isLiked ? "fill-red-400 text-red-400 scale-110 transition-transform" : ""} />
                   <span>{selectedPost.like_count || 0} Likes</span>
                 </button>
-                <div className="flex items-center gap-2 text-sm font-medium text-[#A8A6B8]">
-                  <MessageCircle size={18} className="text-blue-400" />
+                <div className="flex items-center gap-1.5 text-xs sm:text-sm font-medium text-[#A8A6B8]">
+                  <MessageCircle size={16} className="text-blue-400" />
                   <span>{comments.length} Replies</span>
                 </div>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
                 <button
                   onClick={(e) => sharePost(selectedPost.id, e)}
-                  className="text-xs text-[#5C5A70] hover:text-[#C9A84C] transition flex items-center gap-1"
+                  className="text-xs text-[#5C5A70] hover:text-[#C9A84C] transition flex items-center gap-1 p-1"
                 >
-                  <Share2 size={14} />
+                  <Share2 size={13} />
                   <span>Share</span>
                 </button>
               </div>
             </div>
 
             {/* Comment Composer */}
-            <div className="flex items-start gap-3 pt-2">
-              <div className="w-9 h-9 rounded-full bg-[#C9A84C20] flex items-center justify-center text-xs font-bold text-[#C9A84C] shrink-0 border border-[#3A3A52] overflow-hidden">
+            <div className="flex items-start gap-2.5 sm:gap-3 pt-2">
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-[#C9A84C20] flex items-center justify-center text-xs font-bold text-[#C9A84C] shrink-0 border border-[#3A3A52] overflow-hidden">
                 {profile?.avatar_url ? (
                   <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
                 ) : (
                   profile?.full_name?.[0]?.toUpperCase() || "?"
                 )}
               </div>
-              <div className="flex-1 bg-[#0F0F1A] border border-[#3A3A52] focus-within:border-[#C9A84C] rounded-xl p-3 transition">
+              <div className="flex-1 bg-[#0F0F1A] border border-[#3A3A52] focus-within:border-[#C9A84C] rounded-xl p-2.5 sm:p-3 transition">
                 <textarea
                   value={newComment}
                   onChange={(e) => setNewComment(e.target.value)}
@@ -527,21 +537,21 @@ export default function CommunityPage() {
                     }
                   }}
                   rows={2}
-                  placeholder="Write a constructive reply (Press Enter to post)…"
-                  className="w-full bg-transparent text-[#F5F3ED] text-sm outline-none placeholder-[#5C5A70] resize-none"
+                  placeholder="Write a constructive reply…"
+                  className="w-full bg-transparent text-[#F5F3ED] text-xs sm:text-sm outline-none placeholder-[#5C5A70] resize-none"
                 />
                 <div className="flex items-center justify-between border-t border-[#3A3A52]/40 pt-2 mt-1">
-                  <span className="text-[11px] text-[#5C5A70]">Markdown formatting supported</span>
+                  <span className="text-[10px] text-[#5C5A70] hidden sm:inline">Markdown supported</span>
                   <button
                     onClick={submitComment}
                     disabled={!newComment.trim() || submittingComment}
-                    className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition ${
+                    className={`flex items-center gap-1.5 px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs font-semibold transition ml-auto ${
                       newComment.trim() && !submittingComment
                         ? "bg-[#C9A84C] text-[#0A0A0F] hover:bg-[#D4B55D]"
                         : "bg-[#2A2A3E] text-[#5C5A70] cursor-not-allowed"
                     }`}
                   >
-                    {submittingComment ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+                    {submittingComment ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
                     <span>Reply</span>
                   </button>
                 </div>
@@ -550,54 +560,58 @@ export default function CommunityPage() {
           </article>
 
           {/* Comment Thread Stream */}
-          <div className="space-y-3">
-            <h3 className="text-sm font-semibold text-[#F5F3ED] px-1 flex items-center gap-2">
+          <div className="space-y-2.5 sm:space-y-3">
+            <h3 className="text-xs sm:text-sm font-semibold text-[#F5F3ED] px-1 flex items-center gap-2">
               <span>Discussion Thread</span>
               <span className="text-xs font-normal text-[#5C5A70]">({comments.length})</span>
             </h3>
 
             {comments.length === 0 ? (
-              <div className="bg-[#1A1A2E]/50 border border-dashed border-[#3A3A52] rounded-2xl p-8 text-center space-y-2">
-                <MessageSquare size={28} className="text-[#5C5A70] mx-auto opacity-50" />
-                <p className="text-sm text-[#A8A6B8] font-medium">No replies yet</p>
-                <p className="text-xs text-[#5C5A70]">Start the conversation by leaving a reply above.</p>
+              <div className="bg-[#1A1A2E]/50 border border-dashed border-[#3A3A52] rounded-xl sm:rounded-2xl p-6 sm:p-8 text-center space-y-2">
+                <MessageSquare size={24} className="text-[#5C5A70] mx-auto opacity-50" />
+                <p className="text-xs sm:text-sm text-[#A8A6B8] font-medium">No replies yet</p>
+                <p className="text-[11px] sm:text-xs text-[#5C5A70]">Start the conversation by leaving a reply above.</p>
               </div>
             ) : (
               comments.map((c) => (
                 <div
                   key={c.id}
-                  className="bg-[#1A1A2E] border border-[#3A3A52] rounded-xl p-4 transition hover:border-[#4A4A62] space-y-2"
+                  className="bg-[#1A1A2E] border border-[#3A3A52] rounded-xl p-3 sm:p-4 transition hover:border-[#4A4A62] space-y-2"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-full bg-[#C9A84C20] border border-[#3A3A52] flex items-center justify-center text-xs font-bold text-[#C9A84C] shrink-0 overflow-hidden">
+                    <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+                      <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-[#C9A84C20] border border-[#3A3A52] flex items-center justify-center text-[10px] sm:text-xs font-bold text-[#C9A84C] shrink-0 overflow-hidden">
                         {c.is_anonymous ? (
-                          <EyeOff size={14} className="text-purple-400" />
+                          <EyeOff size={13} className="text-purple-400" />
                         ) : c.profiles?.avatar_url ? (
                           <img src={c.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
                         ) : (
                           c.profiles?.full_name?.[0]?.toUpperCase() || "?"
                         )}
                       </div>
-                      <div>
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-xs font-semibold text-[#F5F3ED]">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap">
+                          <span className="text-xs font-semibold text-[#F5F3ED] truncate">
                             {c.is_anonymous ? "Anonymous" : c.profiles?.full_name || "Community Member"}
                           </span>
-                          {!c.is_anonymous && c.profiles?.is_verified && (
-                            <CheckCircle size={12} className="text-emerald-400 fill-emerald-400/20" />
+                          {!c.is_anonymous && (
+                            <VerifiedBadge 
+                              tier={c.profiles?.subscription_tier} 
+                              isVerified={c.profiles?.is_verified} 
+                              size={12} 
+                            />
                           )}
                           {!c.is_anonymous && c.profiles?.role && (
-                            <span className="text-[10px] px-1.5 py-0.2 rounded bg-[#2A2A3E] text-[#A8A6B8] capitalize">
+                            <span className="text-[9px] sm:text-[10px] px-1.5 py-0.2 rounded bg-[#2A2A3E] text-[#A8A6B8] capitalize">
                               {c.profiles.role}
                             </span>
                           )}
                         </div>
-                        <span className="text-[11px] text-[#5C5A70]">@{c.profiles?.username || "user"} · {timeAgo(c.created_at)}</span>
+                        <span className="text-[10px] sm:text-[11px] text-[#5C5A70]">@{c.profiles?.username || "user"} · {timeAgo(c.created_at)}</span>
                       </div>
                     </div>
                   </div>
-                  <p className="text-sm text-[#D8D6E2] pl-10.5 leading-relaxed whitespace-pre-wrap">
+                  <p className="text-xs sm:text-sm text-[#D8D6E2] pl-0 sm:pl-10.5 leading-relaxed whitespace-pre-wrap">
                     {c.content}
                   </p>
                 </div>
@@ -616,7 +630,7 @@ export default function CommunityPage() {
       fullName={profile?.full_name}
       username={profile?.username}
     >
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 py-6">
+      <div className="max-w-7xl mx-auto px-2.5 sm:px-6 py-4 sm:py-6">
         
         {/* Toast Notification */}
         {copyToast && (
@@ -627,7 +641,7 @@ export default function CommunityPage() {
         )}
 
         {/* 3-Column Layout: Navigation | Feed | Trending & Connect */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 items-start">
           
           {/* LEFT SIDEBAR: Fixed User Quick Card & Categories */}
           <aside className="hidden lg:block lg:col-span-3 space-y-4 sticky top-[72px] self-start max-h-[calc(100vh-90px)] overflow-y-auto scrollbar-none pr-1">
@@ -643,7 +657,10 @@ export default function CommunityPage() {
                     )}
                   </div>
                   <div className="min-w-0">
-                    <h3 className="text-sm font-bold text-[#F5F3ED] truncate">{profile.full_name}</h3>
+                    <div className="flex items-center gap-1.5">
+                      <h3 className="text-sm font-bold text-[#F5F3ED] truncate">{profile.full_name}</h3>
+                      <VerifiedBadge tier={profile.subscription_tier} isVerified={profile.is_verified} size={15} />
+                    </div>
                     <p className="text-xs text-[#5C5A70] truncate">@{profile.username}</p>
                     <span className="inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full bg-[#C9A84C]/10 border border-[#C9A84C]/30 text-[#C9A84C] capitalize font-medium">
                       {profile.role}
@@ -652,7 +669,7 @@ export default function CommunityPage() {
                 </div>
                 <div className="border-t border-[#3A3A52]/60 pt-2.5 flex items-center justify-between text-xs text-[#A8A6B8]">
                   <span>Tier Status</span>
-                  <span className="font-semibold text-[#C9A84C] capitalize">{profile.subscription_tier || "Free"}</span>
+                  <span className="font-semibold text-[#C9A84C] capitalize">{normalizedTier === "free" ? "Free" : normalizedTier.toUpperCase()}</span>
                 </div>
               </div>
             )}
@@ -698,23 +715,23 @@ export default function CommunityPage() {
           </aside>
 
           {/* CENTER: Main Feed Stream & Inline Composer */}
-          <main className="col-span-1 lg:col-span-6 space-y-4">
+          <main className="col-span-1 lg:col-span-6 space-y-3 sm:space-y-4">
             
             {/* Header with Title & Mobile Post Button */}
             <div className="flex items-center justify-between pb-1">
               <div>
-                <h1 className="text-xl font-bold text-[#F5F3ED] tracking-tight flex items-center gap-2">
+                <h1 className="text-lg sm:text-xl font-bold text-[#F5F3ED] tracking-tight flex items-center gap-1.5 sm:gap-2">
                   <span>Community Network</span>
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-[#C9A84C]/10 text-[#C9A84C] border border-[#C9A84C]/30 font-medium">
+                  <span className="text-[10px] sm:text-xs px-2 py-0.5 rounded-full bg-[#C9A84C]/10 text-[#C9A84C] border border-[#C9A84C]/30 font-medium">
                     Live
                   </span>
                 </h1>
-                <p className="text-xs text-[#5C5A70] mt-0.5">Connect, share dealflow, showcase startups, and discuss trends</p>
+                <p className="text-[11px] sm:text-xs text-[#5C5A70] mt-0.5">Connect, share dealflow, showcase startups, and discuss trends</p>
               </div>
 
               <button
                 onClick={() => setShowNewPostModal(true)}
-                className="lg:hidden flex items-center gap-1.5 bg-[#C9A84C] text-[#0A0A0F] text-xs font-bold px-3.5 py-2 rounded-full shadow-lg"
+                className="lg:hidden flex items-center gap-1 sm:gap-1.5 bg-[#C9A84C] text-[#0A0A0F] text-xs font-bold px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-full shadow-lg"
               >
                 <Plus size={14} />
                 <span>Post</span>
@@ -722,7 +739,7 @@ export default function CommunityPage() {
             </div>
 
             {/* Mobile Category Horizontal Scroller */}
-            <div className="lg:hidden flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none snap-x">
+            <div className="lg:hidden flex items-center gap-1.5 overflow-x-auto pb-1.5 scrollbar-none [scrollbar-none] [&::-webkit-scrollbar]:hidden">
               {CATEGORIES.map((cat) => {
                 const Icon = cat.icon;
                 const isActive = activeCategory === cat.id;
@@ -730,23 +747,23 @@ export default function CommunityPage() {
                   <button
                     key={cat.id}
                     onClick={() => setActiveCategory(cat.id)}
-                    className={`shrink-0 flex items-center gap-1.5 text-xs px-3.5 py-1.5 rounded-full border transition ${
+                    className={`shrink-0 flex items-center gap-1.5 text-[11px] sm:text-xs px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full border transition ${
                       isActive
-                        ? "bg-[#C9A84C] text-[#0A0A0F] border-[#C9A84C] font-bold"
+                        ? "bg-[#C9A84C] text-[#0A0A0F] border-[#C9A84C] font-bold shadow-xs"
                         : "bg-[#1A1A2E] text-[#A8A6B8] border-[#3A3A52]"
                     }`}
                   >
-                    <Icon size={13} />
+                    <Icon size={12} />
                     <span>{cat.label}</span>
                   </button>
                 );
               })}
             </div>
 
-            {/* INLINE SOCIAL POST COMPOSER (Twitter/X & LinkedIn Style) */}
-            <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-2xl p-4 shadow-xl space-y-3">
-              <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#C9A84C20] to-[#1A1A2E] border border-[#3A3A52] flex items-center justify-center text-sm font-bold text-[#C9A84C] shrink-0 overflow-hidden">
+            {/* INLINE SOCIAL POST COMPOSER */}
+            <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-xl sm:rounded-2xl p-3 sm:p-4 shadow-xl space-y-2.5 sm:space-y-3">
+              <div className="flex items-start gap-2.5 sm:gap-3">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-[#C9A84C20] to-[#1A1A2E] border border-[#3A3A52] flex items-center justify-center text-xs sm:text-sm font-bold text-[#C9A84C] shrink-0 overflow-hidden">
                   {profile?.avatar_url ? (
                     <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
                   ) : (
@@ -754,43 +771,43 @@ export default function CommunityPage() {
                   )}
                 </div>
 
-                <div className="flex-1 space-y-2">
+                <div className="flex-1 min-w-0 space-y-2">
                   <input
                     value={postForm.title}
                     onChange={(e) => setPostForm({ ...postForm, title: e.target.value })}
                     placeholder="Subject title (optional)"
-                    className="w-full bg-transparent text-[#F5F3ED] text-sm font-semibold outline-none placeholder-[#5C5A70] border-b border-[#3A3A52]/40 pb-1.5 focus:border-[#C9A84C]"
+                    className="w-full bg-transparent text-[#F5F3ED] text-xs sm:text-sm font-semibold outline-none placeholder-[#5C5A70] border-b border-[#3A3A52]/40 pb-1 focus:border-[#C9A84C]"
                   />
 
                   <textarea
                     value={postForm.content}
                     onChange={(e) => setPostForm({ ...postForm, content: e.target.value })}
-                    rows={3}
-                    placeholder="Share an update, pitch your startup, ask for advice, or post a deal insight…"
-                    className="w-full bg-transparent text-[#F5F3ED] text-sm leading-relaxed outline-none placeholder-[#5C5A70] resize-none"
+                    rows={2}
+                    placeholder="Share an update, pitch your startup, ask for advice…"
+                    className="w-full bg-transparent text-[#F5F3ED] text-xs sm:text-sm leading-relaxed outline-none placeholder-[#5C5A70] resize-none"
                   />
 
                   {/* Image Attachment Preview in Composer */}
                   {postForm.image_url && (
-                    <div className="relative mt-2 rounded-xl border border-[#3A3A52] overflow-hidden bg-black/60 max-h-72">
+                    <div className="relative mt-2 rounded-xl border border-[#3A3A52] overflow-hidden bg-black/60 max-h-56 sm:max-h-72">
                       <img
                         src={postForm.image_url}
                         alt="Uploaded preview"
-                        className="w-full max-h-72 object-contain mx-auto"
+                        className="w-full max-h-56 sm:max-h-72 object-contain mx-auto"
                       />
                       <button
                         onClick={() => setPostForm((p) => ({ ...p, image_url: null }))}
                         className="absolute top-2 right-2 p-1.5 bg-black/80 hover:bg-red-600 rounded-full text-white transition shadow-lg"
                         title="Remove image"
                       >
-                        <X size={14} />
+                        <X size={13} />
                       </button>
                     </div>
                   )}
 
                   {/* Composer Footer Actions */}
-                  <div className="flex items-center justify-between border-t border-[#3A3A52]/60 pt-3 flex-wrap gap-2">
-                    <div className="flex items-center gap-1.5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between border-t border-[#3A3A52]/60 pt-2.5 gap-2">
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       <input
                         type="file"
                         accept="image/*"
@@ -802,21 +819,21 @@ export default function CommunityPage() {
                         type="button"
                         disabled={uploadingImage}
                         onClick={() => fileInputRef.current?.click()}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[#C9A84C] bg-[#C9A84C]/10 hover:bg-[#C9A84C]/20 border border-[#C9A84C]/30 transition"
+                        className="flex items-center gap-1 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg text-[11px] sm:text-xs font-medium text-[#C9A84C] bg-[#C9A84C]/10 hover:bg-[#C9A84C]/20 border border-[#C9A84C]/30 transition"
                       >
                         {uploadingImage ? (
-                          <Loader2 size={14} className="animate-spin text-[#C9A84C]" />
+                          <Loader2 size={13} className="animate-spin text-[#C9A84C]" />
                         ) : (
-                          <ImageIcon size={14} />
+                          <ImageIcon size={13} />
                         )}
-                        <span>{uploadingImage ? "Uploading…" : "Add Image"}</span>
+                        <span>{uploadingImage ? "Uploading…" : "Image"}</span>
                       </button>
 
                       {/* Category Chip Selector */}
                       <select
                         value={postForm.category}
                         onChange={(e) => setPostForm({ ...postForm, category: e.target.value })}
-                        className="bg-[#0F0F1A] border border-[#3A3A52] text-[#A8A6B8] text-xs rounded-lg px-2.5 py-1.5 outline-none focus:border-[#C9A84C]"
+                        className="bg-[#0F0F1A] border border-[#3A3A52] text-[#A8A6B8] text-[11px] sm:text-xs rounded-lg px-2 py-1 outline-none focus:border-[#C9A84C]"
                       >
                         {CATEGORIES.filter(c => c.id !== "all").map(c => (
                           <option key={c.id} value={c.id}>{c.label}</option>
@@ -827,34 +844,34 @@ export default function CommunityPage() {
                       <button
                         type="button"
                         onClick={() => isPremium && setPostForm({ ...postForm, is_anonymous: !postForm.is_anonymous })}
-                        className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs transition border ${
+                        className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] sm:text-xs transition border ${
                           postForm.is_anonymous
                             ? "bg-purple-500/20 text-purple-300 border-purple-500/40"
                             : "bg-[#0F0F1A] text-[#5C5A70] border-[#3A3A52] hover:text-[#A8A6B8]"
                         }`}
                         title={isPremium ? "Post anonymously" : "Upgrade to Pro for anonymous posting"}
                       >
-                        {postForm.is_anonymous ? <EyeOff size={13} /> : <Eye size={13} />}
-                        <span className="hidden sm:inline">{postForm.is_anonymous ? "Anonymous" : "Public"}</span>
+                        {postForm.is_anonymous ? <EyeOff size={12} /> : <Eye size={12} />}
+                        <span>{postForm.is_anonymous ? "Anon" : "Public"}</span>
                       </button>
                     </div>
 
                     <button
                       onClick={submitPost}
                       disabled={!postForm.content.trim() || submitting || uploadingImage}
-                      className={`flex items-center gap-1.5 px-5 py-2 rounded-full text-xs font-bold transition shadow-md ${
+                      className={`flex items-center justify-center gap-1.5 px-4 py-1.5 sm:px-5 sm:py-2 rounded-full text-xs font-bold transition shadow-md ${
                         postForm.content.trim() && !submitting && !uploadingImage
                           ? "bg-[#C9A84C] text-[#0A0A0F] hover:bg-[#D4B55D] shadow-[#C9A84C]/20"
                           : "bg-[#2A2A3E] text-[#5C5A70] cursor-not-allowed"
                       }`}
                     >
-                      {submitting ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+                      {submitting ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
                       <span>{submitting ? "Posting…" : "Publish"}</span>
                     </button>
                   </div>
 
                   {postError && (
-                    <p className="text-xs text-red-400 bg-red-900/20 border border-red-800/40 px-3 py-1.5 rounded-lg">
+                    <p className="text-[11px] text-red-400 bg-red-900/20 border border-red-800/40 px-2.5 py-1 rounded-lg">
                       {postError}
                     </p>
                   )}
@@ -869,17 +886,17 @@ export default function CommunityPage() {
                 <p className="text-xs text-[#5C5A70]">Loading community conversations…</p>
               </div>
             ) : filteredPosts.length === 0 ? (
-              <div className="bg-[#1A1A2E]/40 border border-dashed border-[#3A3A52] rounded-2xl p-12 text-center space-y-3">
+              <div className="bg-[#1A1A2E]/40 border border-dashed border-[#3A3A52] rounded-xl sm:rounded-2xl p-8 sm:p-12 text-center space-y-3">
                 <div className="w-12 h-12 rounded-full bg-[#2A2A3E] flex items-center justify-center mx-auto text-[#5C5A70]">
                   <Users size={24} />
                 </div>
-                <h3 className="text-base font-bold text-[#F5F3ED]">No discussions in this channel yet</h3>
+                <h3 className="text-sm sm:text-base font-bold text-[#F5F3ED]">No discussions in this channel yet</h3>
                 <p className="text-xs text-[#A8A6B8] max-w-sm mx-auto">
                   Be the catalyst! Share the first post to kick off the conversation with verified founders and investors.
                 </p>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-3 sm:space-y-4">
                 {filteredPosts.map((post) => {
                   const style = CATEGORY_STYLES[post.category] || CATEGORY_STYLES.general;
                   const isLiked = likedPosts.includes(post.id);
@@ -889,48 +906,48 @@ export default function CommunityPage() {
                     <article
                       key={post.id}
                       onClick={() => openPost(post)}
-                      className="bg-[#1A1A2E] border border-[#3A3A52] hover:border-[#4A4A62] rounded-2xl p-5 shadow-lg transition-all duration-200 cursor-pointer space-y-3 group"
+                      className="bg-[#1A1A2E] border border-[#3A3A52] hover:border-[#4A4A62] rounded-xl sm:rounded-2xl p-3.5 sm:p-5 shadow-lg transition-all duration-200 cursor-pointer space-y-2.5 sm:space-y-3 group"
                     >
                       {/* Post Header */}
                       <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#C9A84C20] to-[#1A1A2E] border border-[#3A3A52] flex items-center justify-center text-xs font-bold text-[#C9A84C] shrink-0 overflow-hidden">
+                        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-[#C9A84C20] to-[#1A1A2E] border border-[#3A3A52] flex items-center justify-center text-xs font-bold text-[#C9A84C] shrink-0 overflow-hidden">
                             {post.is_anonymous ? (
-                              <EyeOff size={16} className="text-purple-400" />
+                              <EyeOff size={15} className="text-purple-400" />
                             ) : post.profiles?.avatar_url ? (
                               <img src={post.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
                             ) : (
                               post.profiles?.full_name?.[0]?.toUpperCase() || "?"
                             )}
                           </div>
-                          <div>
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="font-bold text-sm text-[#F5F3ED] group-hover:text-[#C9A84C] transition-colors">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap">
+                              <span className="font-bold text-xs sm:text-sm text-[#F5F3ED] group-hover:text-[#C9A84C] transition-colors truncate">
                                 {post.is_anonymous ? "Anonymous" : post.profiles?.full_name || "Community Member"}
                               </span>
-                              {!post.is_anonymous && post.profiles?.is_verified && (
-                                <CheckCircle size={13} className="text-emerald-400 fill-emerald-400/20" />
+                              {!post.is_anonymous && (
+                                <VerifiedBadge tier={post.profiles?.subscription_tier} isVerified={post.profiles?.is_verified} size={13} />
                               )}
                               {!post.is_anonymous && post.profiles?.role && (
-                                <span className="text-[10px] px-2 py-0.2 rounded-md bg-[#2A2A3E] text-[#A8A6B8] border border-[#3A3A52] capitalize">
+                                <span className="text-[9px] sm:text-[10px] px-1.5 py-0.2 rounded-md bg-[#2A2A3E] text-[#A8A6B8] border border-[#3A3A52] capitalize">
                                   {post.profiles.role}
                                 </span>
                               )}
                               {post.is_pinned && (
-                                <span className="flex items-center gap-1 text-[10px] text-[#C9A84C] bg-[#C9A84C]/10 border border-[#C9A84C]/30 px-2 py-0.2 rounded-md font-medium">
-                                  <Pin size={10} /> Pinned
+                                <span className="flex items-center gap-1 text-[9px] text-[#C9A84C] bg-[#C9A84C]/10 border border-[#C9A84C]/30 px-1.5 py-0.2 rounded-md font-medium">
+                                  <Pin size={9} /> Pinned
                                 </span>
                               )}
                             </div>
-                            <div className="text-[11px] text-[#5C5A70] flex items-center gap-2">
-                              <span>@{post.is_anonymous ? "anonymous" : post.profiles?.username || "user"}</span>
+                            <div className="text-[10px] sm:text-[11px] text-[#5C5A70] flex items-center gap-1.5">
+                              <span className="truncate">@{post.is_anonymous ? "anonymous" : post.profiles?.username || "user"}</span>
                               <span>·</span>
-                              <span>{timeAgo(post.created_at)}</span>
+                              <span className="shrink-0">{timeAgo(post.created_at)}</span>
                             </div>
                           </div>
                         </div>
 
-                        <span className={`text-[11px] px-2.5 py-0.5 rounded-full border capitalize font-medium shrink-0 flex items-center gap-1.5 ${style.badge}`}>
+                        <span className={`text-[10px] sm:text-[11px] px-2 sm:px-2.5 py-0.5 rounded-full border capitalize font-medium shrink-0 flex items-center gap-1 sm:gap-1.5 ${style.badge}`}>
                           <span className={`w-1.5 h-1.5 rounded-full ${style.dot}`} />
                           {post.category}
                         </span>
@@ -938,44 +955,44 @@ export default function CommunityPage() {
 
                       {/* Post Content */}
                       {post.title && (
-                        <h2 className="text-base font-bold text-[#F5F3ED] tracking-tight">
+                        <h2 className="text-sm sm:text-base font-bold text-[#F5F3ED] tracking-tight">
                           {post.title}
                         </h2>
                       )}
-                      <p className="text-[#D8D6E2] text-sm leading-relaxed whitespace-pre-wrap line-clamp-5">
+                      <p className="text-[#D8D6E2] text-xs sm:text-sm leading-relaxed whitespace-pre-wrap line-clamp-4 sm:line-clamp-5">
                         {post.content}
                       </p>
 
-                      {/* FULL MODERATE ATTACHED IMAGE (X / Facebook Style) */}
+                      {/* Attached Image */}
                       {post.image_url && (
                         <div
                           onClick={(e) => {
                             e.stopPropagation();
                             setPreviewImageModal(post.image_url);
                           }}
-                          className="relative rounded-2xl border border-[#3A3A52]/70 overflow-hidden bg-black/50 max-h-[480px] shadow-md group/img transition hover:border-[#C9A84C]/60"
+                          className="relative rounded-xl sm:rounded-2xl border border-[#3A3A52]/70 overflow-hidden bg-black/50 max-h-[320px] sm:max-h-[480px] shadow-md group/img transition hover:border-[#C9A84C]/60"
                         >
                           <img
                             src={post.image_url}
                             alt="Post attachment"
-                            className="w-full max-h-[480px] object-cover sm:object-contain mx-auto transition duration-300 group-hover/img:scale-[1.01]"
+                            className="w-full max-h-[320px] sm:max-h-[480px] object-contain mx-auto transition duration-300 group-hover/img:scale-[1.01]"
                           />
                           <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-md p-1.5 rounded-lg text-white opacity-0 group-hover/img:opacity-100 transition">
-                            <Maximize2 size={14} />
+                            <Maximize2 size={13} />
                           </div>
                         </div>
                       )}
 
                       {/* Post Interactive Action Bar */}
-                      <div className="flex items-center justify-between border-t border-[#3A3A52]/50 pt-3 text-xs text-[#A8A6B8]">
-                        <div className="flex items-center gap-6">
+                      <div className="flex items-center justify-between border-t border-[#3A3A52]/50 pt-2.5 sm:pt-3 text-xs text-[#A8A6B8]">
+                        <div className="flex items-center gap-4 sm:gap-6">
                           <button
                             onClick={(e) => toggleLike(post.id, e)}
                             className={`flex items-center gap-1.5 transition ${
                               isLiked ? "text-red-400 font-bold" : "text-[#A8A6B8] hover:text-red-400"
                             }`}
                           >
-                            <Heart size={16} className={isLiked ? "fill-red-400 text-red-400 scale-110 transition-transform" : ""} />
+                            <Heart size={15} className={isLiked ? "fill-red-400 text-red-400 scale-110 transition-transform" : ""} />
                             <span>{post.like_count || 0}</span>
                           </button>
 
@@ -983,7 +1000,7 @@ export default function CommunityPage() {
                             onClick={(e) => { e.stopPropagation(); openPost(post); }}
                             className="flex items-center gap-1.5 text-[#A8A6B8] hover:text-blue-400 transition"
                           >
-                            <MessageCircle size={16} />
+                            <MessageCircle size={15} />
                             <span>{post.comment_count || 0}</span>
                           </button>
 
@@ -992,7 +1009,7 @@ export default function CommunityPage() {
                             className="flex items-center gap-1.5 text-[#5C5A70] hover:text-[#C9A84C] transition"
                             title="Copy link"
                           >
-                            <Share2 size={15} />
+                            <Share2 size={14} />
                           </button>
                         </div>
 
@@ -1003,7 +1020,7 @@ export default function CommunityPage() {
                           }`}
                           title="Bookmark"
                         >
-                          {isBookmarked ? <BookmarkCheck size={16} /> : <Bookmark size={16} />}
+                          {isBookmarked ? <BookmarkCheck size={15} /> : <Bookmark size={15} />}
                         </button>
                       </div>
                     </article>
@@ -1064,18 +1081,18 @@ export default function CommunityPage() {
         {previewImageModal && (
           <div
             onClick={() => setPreviewImageModal(null)}
-            className="fixed inset-0 z-50 bg-black/95 backdrop-blur-md flex items-center justify-center p-4"
+            className="fixed inset-0 z-50 bg-black/95 backdrop-blur-md flex items-center justify-center p-3 sm:p-4"
           >
             <button
               onClick={() => setPreviewImageModal(null)}
-              className="absolute top-5 right-5 p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition"
+              className="absolute top-4 right-4 p-2 sm:p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition"
             >
-              <X size={24} />
+              <X size={20} className="sm:w-6 sm:h-6" />
             </button>
             <img
               src={previewImageModal}
               alt="Full view"
-              className="max-w-full max-h-[90vh] object-contain rounded-xl shadow-2xl"
+              className="max-w-[95vw] max-h-[85vh] object-contain rounded-xl shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             />
           </div>
@@ -1083,8 +1100,8 @@ export default function CommunityPage() {
 
         {/* CREATE POST MODAL (For mobile button / header trigger) */}
         {showNewPostModal && (
-          <div className="fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-            <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-2xl p-6 w-full max-w-lg shadow-2xl space-y-4">
+          <div className="fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-3 sm:p-4 backdrop-blur-sm">
+            <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-2xl p-4 sm:p-6 w-full max-w-lg shadow-2xl space-y-3 sm:space-y-4 max-h-[90vh] overflow-y-auto">
               <div className="flex items-center justify-between border-b border-[#3A3A52]/60 pb-3">
                 <h3 className="text-sm font-bold text-[#F5F3ED] flex items-center gap-2">
                   <Sparkles size={16} className="text-[#C9A84C]" />
@@ -1106,7 +1123,7 @@ export default function CommunityPage() {
                   value={postForm.title}
                   onChange={(e) => setPostForm({ ...postForm, title: e.target.value })}
                   placeholder="Thread Topic Title (optional)"
-                  className="w-full bg-[#0F0F1A] border border-[#3A3A52] text-[#F5F3ED] text-sm rounded-xl px-4 py-2.5 outline-none focus:border-[#C9A84C] transition"
+                  className="w-full bg-[#0F0F1A] border border-[#3A3A52] text-[#F5F3ED] text-xs sm:text-sm rounded-xl px-3.5 py-2.5 outline-none focus:border-[#C9A84C] transition"
                 />
 
                 <textarea
@@ -1114,28 +1131,28 @@ export default function CommunityPage() {
                   onChange={(e) => setPostForm({ ...postForm, content: e.target.value })}
                   rows={4}
                   placeholder="What would you like to share or discuss with the community?"
-                  className="w-full bg-[#0F0F1A] border border-[#3A3A52] text-[#F5F3ED] text-sm rounded-xl px-4 py-3 outline-none focus:border-[#C9A84C] transition resize-none"
+                  className="w-full bg-[#0F0F1A] border border-[#3A3A52] text-[#F5F3ED] text-xs sm:text-sm rounded-xl px-3.5 py-3 outline-none focus:border-[#C9A84C] transition resize-none"
                 />
 
                 {postForm.image_url && (
-                  <div className="relative rounded-xl border border-[#3A3A52] overflow-hidden bg-black/60 max-h-60">
-                    <img src={postForm.image_url} alt="" className="w-full max-h-60 object-contain mx-auto" />
+                  <div className="relative rounded-xl border border-[#3A3A52] overflow-hidden bg-black/60 max-h-52 sm:max-h-60">
+                    <img src={postForm.image_url} alt="" className="w-full max-h-52 sm:max-h-60 object-contain mx-auto" />
                     <button
                       onClick={() => setPostForm((p) => ({ ...p, image_url: null }))}
                       className="absolute top-2 right-2 p-1.5 bg-black/80 hover:bg-red-600 rounded-full text-white transition"
                     >
-                      <X size={14} />
+                      <X size={13} />
                     </button>
                   </div>
                 )}
 
-                <div className="flex items-center justify-between gap-2 border-t border-[#3A3A52]/60 pt-3">
-                  <div className="flex items-center gap-2">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-t border-[#3A3A52]/60 pt-3">
+                  <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                     <button
                       type="button"
                       disabled={uploadingImage}
                       onClick={() => fileInputRef.current?.click()}
-                      className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium text-[#C9A84C] bg-[#C9A84C]/10 border border-[#C9A84C]/30"
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-[#C9A84C] bg-[#C9A84C]/10 border border-[#C9A84C]/30"
                     >
                       {uploadingImage ? <Loader2 size={13} className="animate-spin" /> : <ImageIcon size={13} />}
                       <span>Add Image</span>
@@ -1154,13 +1171,14 @@ export default function CommunityPage() {
                   <button
                     onClick={submitPost}
                     disabled={!postForm.content.trim() || submitting || uploadingImage}
-                    className={`px-5 py-2 rounded-full text-xs font-bold transition ${
+                    className={`w-full sm:w-auto px-5 py-2 rounded-full text-xs font-bold transition flex items-center justify-center gap-1.5 ${
                       postForm.content.trim() && !submitting && !uploadingImage
                         ? "bg-[#C9A84C] text-[#0A0A0F] hover:bg-[#D4B55D]"
                         : "bg-[#2A2A3E] text-[#5C5A70] cursor-not-allowed"
                     }`}
                   >
-                    {submitting ? "Publishing…" : "Publish Post"}
+                    {submitting ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+                    <span>Publish Post</span>
                   </button>
                 </div>
               </div>

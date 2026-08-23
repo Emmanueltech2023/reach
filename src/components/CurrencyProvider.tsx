@@ -37,110 +37,131 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
     }
   }, [currency]);
 
-  // Detect location via free IP GeoIP API
+  // Detect location safely using browser locale & timezone without failing network requests
   const detectLocation = async (): Promise<{ countryCode: string; currencyCode: string }> => {
+    // 1. Browser language detection (instant, zero network)
     try {
-      const response = await fetch("https://ipapi.co/json/");
-      if (response.ok) {
-        const data = await response.json();
-        if (data.country_code) {
-          const countryCode = data.country_code.toUpperCase();
+      if (typeof window !== "undefined" && navigator?.language) {
+        const parts = navigator.language.split("-");
+        const countryCode = (parts.length > 1 ? parts[1] : parts[0]).toUpperCase();
+        if (countryCode.length === 2) {
           const currencyCode = getCurrencyForCountry(countryCode);
           return { countryCode, currencyCode };
         }
       }
-    } catch (e) {
-      console.warn("Failed to detect location via ipapi, falling back to browser language:", e);
-    }
+    } catch {}
 
-    // Fallback: browser language
+    // 2. Timezone heuristic
     try {
-      const lang = navigator.language.split("-")[1] || navigator.language;
-      if (lang && lang.length === 2) {
-        const countryCode = lang.toUpperCase();
-        return { countryCode, currencyCode: getCurrencyForCountry(countryCode) };
-      }
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (tz.includes("London")) return { countryCode: "GB", currencyCode: "GBP" };
+      if (tz.includes("Lagos") || tz.includes("Africa/Lagos")) return { countryCode: "NG", currencyCode: "NGN" };
+      if (tz.includes("Paris") || tz.includes("Berlin") || tz.includes("Rome") || tz.includes("Madrid")) return { countryCode: "FR", currencyCode: "EUR" };
+      if (tz.includes("Tokyo")) return { countryCode: "JP", currencyCode: "JPY" };
+      if (tz.includes("Toronto") || tz.includes("Vancouver")) return { countryCode: "CA", currencyCode: "CAD" };
+      if (tz.includes("Sydney") || tz.includes("Melbourne")) return { countryCode: "AU", currencyCode: "AUD" };
     } catch {}
 
     return { countryCode: "US", currencyCode: "USD" };
   };
 
   useEffect(() => {
+    let isMounted = true;
+
     async function initCurrency() {
       try {
         // 1. Check local storage first
-        const savedCurrency = localStorage.getItem("preferred_currency");
-        const savedCountry = localStorage.getItem("preferred_country");
+        if (typeof window !== "undefined") {
+          const savedCurrency = localStorage.getItem("preferred_currency");
+          const savedCountry = localStorage.getItem("preferred_country");
 
-        if (savedCurrency && savedCountry) {
-          setCurrencyState(savedCurrency);
-          setCountry(savedCountry);
-          setLoading(false);
-        }
-
-        // 2. Check authenticated profile
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("country, preferred_currency")
-            .eq("id", user.id)
-            .single();
-
-          if (profile) {
-            let activeCountry = profile.country;
-            let activeCurrency = (profile as any).preferred_currency;
-
-            // If profile has country but no currency, map it
-            if (activeCountry && !activeCurrency) {
-              activeCurrency = getCurrencyForCountry(activeCountry);
+          if (savedCurrency && savedCountry) {
+            if (isMounted) {
+              setCurrencyState(savedCurrency);
+              setCountry(savedCountry);
+              setLoading(false);
             }
-
-            // If profile has nothing, detect it now
-            if (!activeCountry || !activeCurrency) {
-              const detected = await detectLocation();
-              activeCountry = activeCountry || detected.countryCode;
-              activeCurrency = activeCurrency || detected.currencyCode;
-
-              // Save to profile
-              await fetch("/api/profile/update", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  userId: user.id,
-                  updates: {
-                    country: activeCountry,
-                    preferred_currency: activeCurrency,
-                  },
-                }),
-              });
-            }
-
-            setCurrencyState(activeCurrency);
-            setCountry(activeCountry);
-            localStorage.setItem("preferred_currency", activeCurrency);
-            localStorage.setItem("preferred_country", activeCountry);
-            setLoading(false);
-            return;
           }
         }
 
-        // 3. Fallback to geolocation if not logged in / no saved preferences
-        if (!savedCurrency) {
-          const detected = await detectLocation();
+        // 2. Check authenticated profile safely
+        let user: any = null;
+        try {
+          const { data } = await supabase.auth.getUser();
+          user = data?.user || null;
+        } catch {
+          user = null;
+        }
+
+        if (user) {
+          try {
+            const { data: profile } = await supabase
+              .from("profiles")
+              .select("country, preferred_currency")
+              .eq("id", user.id)
+              .maybeSingle();
+
+            if (profile && isMounted) {
+              let activeCountry = profile.country;
+              let activeCurrency = (profile as any).preferred_currency;
+
+              if (activeCountry && !activeCurrency) {
+                activeCurrency = getCurrencyForCountry(activeCountry);
+              }
+
+              if (!activeCountry || !activeCurrency) {
+                const detected = await detectLocation();
+                activeCountry = activeCountry || detected.countryCode;
+                activeCurrency = activeCurrency || detected.currencyCode;
+
+                const { data: { session } } = await supabase.auth.getSession();
+                if (session?.access_token) {
+                  fetch("/api/profile/update", {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                      Authorization: `Bearer ${session.access_token}`,
+                    },
+                    body: JSON.stringify({
+                      userId: user.id,
+                      updates: {
+                        country: activeCountry,
+                        preferred_currency: activeCurrency,
+                      },
+                    }),
+                  }).catch(() => {});
+                }
+              }
+
+              setCurrencyState(activeCurrency);
+              setCountry(activeCountry);
+              if (typeof window !== "undefined") {
+                localStorage.setItem("preferred_currency", activeCurrency);
+                localStorage.setItem("preferred_country", activeCountry);
+              }
+              setLoading(false);
+              return;
+            }
+          } catch {}
+        }
+
+        // 3. Fallback for guests
+        const detected = await detectLocation();
+        if (isMounted) {
           setCurrencyState(detected.currencyCode);
           setCountry(detected.countryCode);
-          localStorage.setItem("preferred_currency", detected.currencyCode);
-          localStorage.setItem("preferred_country", detected.countryCode);
+          setLoading(false);
         }
-      } catch (err) {
-        console.error("Error initializing currency:", err);
-      } finally {
-        setLoading(false);
+      } catch {
+        if (isMounted) setLoading(false);
       }
     }
 
-    initCurrency();
+    void initCurrency();
+
+    return () => {
+      isMounted = false;
+    };
   }, [supabase]);
 
   const setCurrency = async (code: string) => {

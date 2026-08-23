@@ -2,10 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { Lock, Zap, Sparkles, ArrowRight } from "lucide-react";
+import { normalizeTier, type Tier } from "@/hooks/useSubscription";
 
 interface Props {
   requiredTier: "pro" | "premium";
-  currentTier: string;
+  currentTier: string | Tier;
   featureName: string;
   featureDesc: string;
   children: React.ReactNode;
@@ -19,10 +20,11 @@ export default function TierGate({
   children,
 }: Props) {
   const router = useRouter();
+  const normalized = normalizeTier(currentTier);
 
   const hasAccess =
-    currentTier === "premium" ||
-    (requiredTier === "pro" && currentTier === "pro");
+    normalized === "premium" ||
+    (requiredTier === "pro" && normalized === "pro");
 
   if (hasAccess) return <>{children}</>;
 

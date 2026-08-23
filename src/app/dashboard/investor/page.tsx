@@ -15,9 +15,12 @@ import {
   Loader2,
   ChevronDown,
   MapPin,
+  Zap,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrency } from "@/components/CurrencyProvider";
+import TierBadge from "@/components/TierBadge";
+import VerifiedBadge from "@/components/VerifiedBadge";
 
 type Project = {
   id: string;
@@ -39,6 +42,7 @@ type Project = {
     avatar_url: string | null;
     is_verified: boolean;
     trust_score: number;
+    subscription_tier?: string;
   };
 };
 
@@ -137,7 +141,8 @@ export default function InvestorDashboard() {
   });
 
   const premium = filtered.filter((p) => p.tier === "premium");
-  const standard = filtered.filter((p) => p.tier !== "premium");
+  const pro = filtered.filter((p) => p.tier === "pro");
+  const standard = filtered.filter((p) => p.tier !== "premium" && p.tier !== "pro");
 
   return (
     <DashboardShell role="investor">
@@ -184,7 +189,7 @@ export default function InvestorDashboard() {
         </div>
 
         {/* Dynamic Project Rendering Context */}
-        <div className="space-y-8 pb-16 md:pb-4">
+        <div className="space-y-10 pb-16 md:pb-4">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-40 gap-3 bg-[#1A1A2E]/10 rounded-2xl border border-[#3A3A52]/40">
               <Loader2 size={26} className="text-[#C9A84C] animate-spin" />
@@ -199,16 +204,21 @@ export default function InvestorDashboard() {
             </div>
           ) : (
             <>
-              {/* Premium Category Layout */}
+              {/* 1. Premium Category Layout */}
               {premium.length > 0 && (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 pl-1">
-                    <Star size={14} className="text-[#C9A84C] fill-[#C9A84C]" />
-                    <span className="text-xs font-semibold text-[#A8A6B8] uppercase tracking-wider">
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2.5 pl-1">
+                    <div className="w-6 h-6 rounded-lg bg-[#C9A84C20] flex items-center justify-center">
+                      <Star size={14} className="text-[#C9A84C] fill-[#C9A84C]" />
+                    </div>
+                    <h2 className="text-sm font-bold text-[#F5F3ED] uppercase tracking-wider">
                       Premium Listings
+                    </h2>
+                    <span className="text-xs bg-[#C9A84C20] text-[#C9A84C] px-2.5 py-0.5 rounded-full border border-[#C9A84C40] font-bold">
+                      {premium.length} featured
                     </span>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-6">
                     {premium.map((p) => (
                       <ProjectCard key={p.id} project={p} bookmarks={bookmarks}
                         toggleBookmark={toggleBookmark} getColor={getColor}
@@ -219,15 +229,43 @@ export default function InvestorDashboard() {
                 </div>
               )}
 
-              {/* Standard Category Layout */}
-              {standard.length > 0 && (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 pl-1">
-                    <span className="text-xs font-semibold text-[#A8A6B8] uppercase tracking-wider">
-                      All Registered Listings
+              {/* 2. Pro Category Layout */}
+              {pro.length > 0 && (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2.5 pl-1">
+                    <div className="w-6 h-6 rounded-lg bg-blue-900/30 flex items-center justify-center">
+                      <Zap size={14} className="text-blue-400 fill-blue-400" />
+                    </div>
+                    <h2 className="text-sm font-bold text-[#F5F3ED] uppercase tracking-wider">
+                      Pro Listings
+                    </h2>
+                    <span className="text-xs bg-blue-900/30 text-blue-400 px-2.5 py-0.5 rounded-full border border-blue-800 font-bold">
+                      {pro.length}
                     </span>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-6">
+                    {pro.map((p) => (
+                      <ProjectCard key={p.id} project={p} bookmarks={bookmarks}
+                        toggleBookmark={toggleBookmark} getColor={getColor}
+                        formatCurrency={formatCurrency} getRaisedPercent={getRaisedPercent}
+                        getInitials={getInitials} router={router} />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 3. Standard / All Registered Listings */}
+              {standard.length > 0 && (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2.5 pl-1">
+                    <span className="text-sm font-bold text-[#A8A6B8] uppercase tracking-wider">
+                      All Registered Listings
+                    </span>
+                    <span className="text-xs bg-[#1A1A2E] text-[#A8A6B8] px-2.5 py-0.5 rounded-full border border-[#3A3A52] font-semibold">
+                      {standard.length}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-6">
                     {standard.map((p) => (
                       <ProjectCard key={p.id} project={p} bookmarks={bookmarks}
                         toggleBookmark={toggleBookmark} getColor={getColor}
@@ -274,7 +312,7 @@ function ProjectCard({
       
       <div>
         {/* Dynamic Project Visual Header Layer */}
-        <div className="h-32 w-full relative overflow-hidden bg-[#0F0F1A] border-b border-[#3A3A52]/30">
+        <div className="h-16 sm:h-32 w-full relative overflow-hidden bg-[#0F0F1A] border-b border-[#3A3A52]/30">
           {projectCoverImage ? (
             <Image
               src={projectCoverImage}
@@ -289,36 +327,50 @@ function ProjectCard({
           {/* Linear Backdrop protection block */}
           <div className="absolute inset-0 bg-linear-to-t from-[#1A1A2E] via-[#1A1A2E]/40 to-transparent" />
           
+          {/* Tier Highlight Ribbon / Tag on Image */}
+          {p.tier === "premium" && (
+            <div className="absolute top-1.5 sm:top-3 left-1.5 sm:left-3 z-10 flex items-center gap-1 bg-[#0F0F1A]/90 border border-[#C9A84C] text-[#C9A84C] text-[8px] sm:text-[10px] font-bold px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full shadow-lg shadow-black/50 backdrop-blur-xs">
+              <Star size={9} className="fill-[#C9A84C] sm:w-2.5 sm:h-2.5" />
+              <span>PREMIUM</span>
+            </div>
+          )}
+          {p.tier === "pro" && (
+            <div className="absolute top-1.5 sm:top-3 left-1.5 sm:left-3 z-10 flex items-center gap-1 bg-[#0F0F1A]/90 border border-blue-500/80 text-blue-400 text-[8px] sm:text-[10px] font-bold px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full shadow-lg shadow-black/50 backdrop-blur-xs">
+              <Zap size={9} className="fill-blue-400 sm:w-2.5 sm:h-2.5" />
+              <span>PRO</span>
+            </div>
+          )}
+
           {/* Floating Bookmark Trigger */}
-          <div className="absolute top-3 right-3 z-10">
+          <div className="absolute top-1.5 sm:top-3 right-1.5 sm:right-3 z-10">
             <button 
               onClick={(e) => {
                 e.stopPropagation();
                 toggleBookmark(p.id);
               }}
-              className="p-1.5 rounded-md bg-[#0F0F1A]/80 border border-[#3A3A52]/60 hover:border-[#C9A84C] text-[#A8A6B8] hover:text-[#C9A84C] backdrop-blur-xs transition"
+              className="p-1 sm:p-1.5 rounded-md bg-[#0F0F1A]/80 border border-[#3A3A52]/60 hover:border-[#C9A84C] text-[#A8A6B8] hover:text-[#C9A84C] backdrop-blur-xs transition"
             >
-              <Bookmark size={14} className={isBookmarked ? "text-[#C9A84C] fill-[#C9A84C]" : ""} />
+              <Bookmark size={12} className={`sm:w-3.5 sm:h-3.5 ${isBookmarked ? "text-[#C9A84C] fill-[#C9A84C]" : ""}`} />
             </button>
           </div>
         </div>
 
         {/* Content Container Body */}
-        <div className="px-5 pt-4 pb-2 space-y-4">
+        <div className="px-2.5 sm:px-5 pt-2.5 sm:pt-4 pb-1.5 sm:pb-2 space-y-2 sm:space-y-4">
           
           {/* Card Header metadata layer */}
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className={`text-[9px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-sm ${
+          <div className="flex items-center justify-between gap-1.5">
+            <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap">
+              <span className={`text-[8px] sm:text-[9px] uppercase tracking-wider font-bold px-1.5 sm:px-2 py-0.2 sm:py-0.5 rounded-sm ${
                 p.category?.toLowerCase() === "web3" ? "bg-purple-950/80 text-purple-300 border border-purple-800/30" : "bg-blue-950/80 text-blue-300 border border-blue-800/30"
               }`}>
                 {p.category?.toUpperCase() || "WEB3"}
               </span>
-              <span className="text-[10px] text-[#A8A6B8] bg-[#0F0F1A]/50 px-2 py-0.5 rounded border border-[#3A3A52]/30 font-medium">{p.sector}</span>
+              <span className="text-[9px] sm:text-[10px] text-[#A8A6B8] bg-[#0F0F1A]/50 px-1.5 sm:px-2 py-0.2 sm:py-0.5 rounded border border-[#3A3A52]/30 font-medium truncate max-w-[80px] sm:max-w-none">{p.sector}</span>
             </div>
             
             {p.country && (
-              <span className="flex items-center gap-0.5 text-[11px] text-[#5C5A70]">
+              <span className="hidden sm:flex items-center gap-0.5 text-[11px] text-[#5C5A70]">
                 <MapPin size={10} />
                 {p.country}
               </span>
@@ -326,8 +378,8 @@ function ProjectCard({
           </div>
 
           {/* Profile Card Center Content Layer */}
-          <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xs font-bold tracking-wider shrink-0 border border-white/5 shadow-md overflow-hidden ${getColor(p.profiles?.id || "a")}`}>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className={`w-7 h-7 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl flex items-center justify-center text-[10px] sm:text-xs font-bold tracking-wider shrink-0 border border-white/5 shadow-md overflow-hidden ${getColor(p.profiles?.id || "a")}`}>
               {p.profiles?.avatar_url ? (
                 <Image
                   src={p.profiles.avatar_url}
@@ -342,41 +394,43 @@ function ProjectCard({
               )}
             </div>
             <div className="min-w-0 flex-1">
-              <div className="text-[#F5F3ED] text-base font-semibold truncate group-hover:text-[#C9A84C] transition duration-150">
+              <div className="text-[#F5F3ED] text-xs sm:text-base font-semibold truncate group-hover:text-[#C9A84C] transition duration-150">
                 {p.name}
               </div>
-              <div className="flex items-center gap-1 min-w-0">
-                {p.profiles?.is_verified && (
-                  <CheckCircle size={12} className="text-emerald-400 fill-emerald-400/10 shrink-0" />
-                )}
-                <span className="text-[#5C5A70] text-xs truncate font-medium">
+              <div className="flex items-center gap-1 min-w-0 mt-0.5 flex-wrap">
+                <span className="text-[#5C5A70] text-[10px] sm:text-xs truncate font-medium">
                   by {p.profiles?.full_name || "Anonymous Founder"}
                 </span>
+                <VerifiedBadge 
+                  tier={p.tier || p.profiles?.subscription_tier} 
+                  isVerified={p.profiles?.is_verified} 
+                  size={12} 
+                />
               </div>
             </div>
           </div>
 
           {/* Context description block */}
-          <p className="text-[#A8A6B8] text-xs leading-relaxed line-clamp-2 min-h-8">
+          <p className="text-[#A8A6B8] text-[10px] sm:text-xs leading-relaxed line-clamp-2 min-h-5 sm:min-h-8">
             {p.short_description}
           </p>
         </div>
       </div>
 
       {/* Metrics Section Footer Block */}
-      <div className="px-5 pb-5 pt-3 border-t border-[#3A3A52]/30 bg-[#141426]/60 space-y-3.5">
-        <div className="grid grid-cols-3 gap-2 text-left">
-          <div className="bg-[#0F0F1A]/50 rounded-lg p-2 border border-[#3A3A52]/20">
-            <div className="text-[#F5F3ED] text-xs font-bold truncate">{formatCurrency(p.funding_goal)}</div>
-            <div className="text-[#5C5A70] text-[9px] uppercase tracking-wider font-bold mt-0.5">Goal</div>
+      <div className="px-2.5 sm:px-5 pb-2.5 sm:pb-5 pt-1.5 sm:pt-3 border-t border-[#3A3A52]/30 bg-[#141426]/60 space-y-2 sm:space-y-3.5">
+        <div className="grid grid-cols-3 gap-1 sm:gap-2 text-left">
+          <div className="bg-[#0F0F1A]/50 rounded-md sm:rounded-lg p-1 sm:p-2 border border-[#3A3A52]/20">
+            <div className="text-[#F5F3ED] text-[9px] sm:text-xs font-bold truncate">{formatCurrency(p.funding_goal)}</div>
+            <div className="text-[#5C5A70] text-[8px] sm:text-[9px] uppercase tracking-wider font-bold mt-0.5 truncate">Goal</div>
           </div>
-          <div className="bg-[#0F0F1A]/50 rounded-lg p-2 border border-[#3A3A52]/20">
-            <div className="text-[#F5F3ED] text-xs font-bold">{p.equity_offered}%</div>
-            <div className="text-[#5C5A70] text-[9px] uppercase tracking-wider font-bold mt-0.5">Equity</div>
+          <div className="bg-[#0F0F1A]/50 rounded-md sm:rounded-lg p-1 sm:p-2 border border-[#3A3A52]/20">
+            <div className="text-[#F5F3ED] text-[9px] sm:text-xs font-bold truncate">{p.equity_offered}%</div>
+            <div className="text-[#5C5A70] text-[8px] sm:text-[9px] uppercase tracking-wider font-bold mt-0.5 truncate">Equity</div>
           </div>
-          <div className="bg-[#0F0F1A]/50 rounded-lg p-2 border border-[#3A3A52]/20">
-            <div className="text-[#C9A84C] text-xs font-bold">{raisedPct}%</div>
-            <div className="text-[#5C5A70] text-[9px] uppercase tracking-wider font-bold mt-0.5">Raised</div>
+          <div className="bg-[#0F0F1A]/50 rounded-md sm:rounded-lg p-1 sm:p-2 border border-[#3A3A52]/20">
+            <div className="text-[#C9A84C] text-[9px] sm:text-xs font-bold truncate">{raisedPct}%</div>
+            <div className="text-[#5C5A70] text-[8px] sm:text-[9px] uppercase tracking-wider font-bold mt-0.5 truncate">Raised</div>
           </div>
         </div>
 
@@ -386,7 +440,7 @@ function ProjectCard({
         </div>
 
         {/* Operational Trigger Elements */}
-        <div className="flex gap-2.5 pt-0.5">
+        <div className="flex gap-1.5 sm:gap-2.5 pt-0.5">
           <button
             onClick={async () => {
               const supabaseClient = createClient();
@@ -404,18 +458,18 @@ function ProjectCard({
               const { conversationId } = await res.json();
               router.push(`/dashboard/chats?conversationId=${conversationId}`);
             }}
-            className="flex-1 flex items-center justify-center gap-1.5 bg-[#C9A84C] text-[#1A1A2E] text-[11px] font-bold uppercase tracking-wider py-2.5 rounded-lg hover:bg-[#b5953e] transition duration-150 shadow-md shadow-[#C9A84C]/5"
+            className="flex-1 flex items-center justify-center gap-1 sm:gap-1.5 bg-[#C9A84C] text-[#1A1A2E] text-[9px] sm:text-[11px] font-bold uppercase tracking-wider py-1.5 sm:py-2.5 rounded-md sm:rounded-lg hover:bg-[#b5953e] transition duration-150 shadow-md shadow-[#C9A84C]/5"
           >
-            <MessageCircle size={13} />
-            Chat
+            <MessageCircle size={11} className="sm:w-3.5 sm:h-3.5" />
+            <span>Chat</span>
           </button>
           
           <button
             onClick={() => router.push(`/dashboard/project/${p.id}`)}
-            className="flex-1 flex items-center justify-center gap-1.5 bg-[#0F0F1A]/40 border border-[#3A3A52] text-[#A8A6B8] text-[11px] font-bold uppercase tracking-wider py-2.5 rounded-lg hover:border-[#5C5A70] hover:text-[#F5F3ED] transition duration-150"
+            className="flex-1 flex items-center justify-center gap-1 sm:gap-1.5 bg-[#0F0F1A]/40 border border-[#3A3A52] text-[#A8A6B8] text-[9px] sm:text-[11px] font-bold uppercase tracking-wider py-1.5 sm:py-2.5 rounded-md sm:rounded-lg hover:border-[#5C5A70] hover:text-[#F5F3ED] transition duration-150"
           >
-            <TrendingUp size={13} />
-            Details
+            <TrendingUp size={11} className="sm:w-3.5 sm:h-3.5" />
+            <span>Details</span>
           </button>
         </div>
       </div>

@@ -10,11 +10,17 @@ import {
   Camera, CheckCircle, Globe, X,
   Link2, MapPin, Loader2, Save, Edit2,
   DollarSign, Zap, Sparkles, Eye, EyeOff, ShieldCheck,
+  Mail, Smartphone
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import WalletConnect from "@/components/WalletConnect";
 import { useCurrency } from "@/components/CurrencyProvider";
 import { getSupportedCurrencies } from "@/lib/currency";
+import TierBadge from "@/components/TierBadge";
+import VerifiedBadge from "@/components/VerifiedBadge";
+import KycModal from "@/components/KycModal";
+import EmailVerificationModal from "@/components/EmailVerificationModal";
+import PhoneVerificationModal from "@/components/PhoneVerificationModal";
 
 const INVESTMENT_FOCUS_OPTIONS = [
   "FinTech","HealthTech","EdTech","AgriTech","DeFi",
@@ -57,6 +63,12 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+
+  // Verification Modals State
+  const [showKycModal, setShowKycModal] = useState(false);
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [showPhoneModal, setShowPhoneModal] = useState(false);
+  const [userEmail, setUserEmail] = useState("");
 
   const toggleAnonymousMode = async () => {
     if (!profile) return;
@@ -305,13 +317,11 @@ export default function ProfilePage() {
             )}
           </div>
           <div className="flex-1 pb-1">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-[#F5F3ED] text-lg font-medium">
                 {profile?.full_name}
               </h1>
-              {profile?.is_verified && (
-                <CheckCircle size={16} className="text-emerald-400" />
-              )}
+              <VerifiedBadge tier={profile?.subscription_tier} isVerified={profile?.is_verified} size={18} />
             </div>
             <div className="flex items-center gap-2 text-xs text-[#5C5A70]">
               <span>@{profile?.username}</span>
@@ -351,15 +361,78 @@ export default function ProfilePage() {
   
   {/* Left Column: Status Indicators */}
   <div className="flex flex-col gap-3">
-    {/* KYC Status */}
-    <div className={`flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-medium border ${
-      profile?.kyc_status === "approved"
-        ? "bg-emerald-900/10 text-emerald-400 border-emerald-900/50"
-        : "bg-yellow-900/10 text-yellow-400 border-yellow-900/50"
-    }`}>
-      <CheckCircle size={16} />
-      KYC {profile?.kyc_status === "approved" ? "Verified" : "Pending"}
-    </div>
+    {/* KYC Document Verification */}
+    <button
+      type="button"
+      onClick={() => setShowKycModal(true)}
+      className={`flex items-center justify-between gap-2 px-4 py-3 rounded-xl text-xs font-semibold border transition cursor-pointer ${
+        profile?.kyc_status === "approved"
+          ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+          : profile?.kyc_status === "pending"
+          ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
+          : profile?.kyc_status === "rejected"
+          ? "bg-red-500/10 text-red-400 border-red-500/30"
+          : "bg-[#1A1A2E] border-[#3A3A52] text-[#A8A6B8] hover:border-[#C9A84C]"
+      }`}
+    >
+      <div className="flex items-center gap-2">
+        <ShieldCheck size={16} />
+        <span>
+          KYC Documents: {
+            profile?.kyc_status === "approved"
+              ? "Verified ✓"
+              : profile?.kyc_status === "pending"
+              ? "Pending Review ⏳"
+              : profile?.kyc_status === "rejected"
+              ? "Rejected ❌ (Click to Resubmit)"
+              : "Submit Identity Documents 🛡️"
+          }
+        </span>
+      </div>
+      <span className="text-[10px] uppercase font-bold text-[#C9A84C]">Manage</span>
+    </button>
+
+    {/* Email OTP Verification */}
+    <button
+      type="button"
+      onClick={() => setShowEmailModal(true)}
+      className={`flex items-center justify-between gap-2 px-4 py-3 rounded-xl text-xs font-semibold border transition cursor-pointer ${
+        (profile as any)?.email_verified
+          ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+          : "bg-[#1A1A2E] border-[#3A3A52] text-[#A8A6B8] hover:border-[#C9A84C]"
+      }`}
+    >
+      <div className="flex items-center gap-2">
+        <Mail size={16} />
+        <span>
+          Email: {(profile as any)?.email_verified ? "Verified ✓" : "Verify Email Address 📧"}
+        </span>
+      </div>
+      <span className="text-[10px] uppercase font-bold text-[#C9A84C]">
+        {(profile as any)?.email_verified ? "Verified" : "Verify"}
+      </span>
+    </button>
+
+    {/* Phone SMS Verification */}
+    <button
+      type="button"
+      onClick={() => setShowPhoneModal(true)}
+      className={`flex items-center justify-between gap-2 px-4 py-3 rounded-xl text-xs font-semibold border transition cursor-pointer ${
+        (profile as any)?.phone_verified
+          ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+          : "bg-[#1A1A2E] border-[#3A3A52] text-[#A8A6B8] hover:border-[#C9A84C]"
+      }`}
+    >
+      <div className="flex items-center gap-2">
+        <Smartphone size={16} />
+        <span>
+          Phone: {(profile as any)?.phone_verified ? "Verified ✓" : "Verify Phone Number 📱"}
+        </span>
+      </div>
+      <span className="text-[10px] uppercase font-bold text-[#C9A84C]">
+        {(profile as any)?.phone_verified ? "Verified" : "Verify"}
+      </span>
+    </button>
 
     {/* Trust Score */}
     {profile && profile.trust_score > 0 && (
@@ -377,16 +450,16 @@ export default function ProfilePage() {
     <div className="flex items-center justify-between gap-4">
       <div>
         <div className="text-[#F5F3ED] text-sm font-medium capitalize">
-          {profile?.subscription_tier || "Free"} Plan
+          {(profile?.subscription_tier || features.tier || "free").toLowerCase() === "free" ? "Free" : (profile?.subscription_tier || features.tier || "free").toUpperCase()} Plan
         </div>
         <div className="text-[#5C5A70] text-[11px] mt-0.5">
-          {profile?.subscription_tier === "free" || !profile?.subscription_tier
-            ? "Upgrade to unlock features"
-            : "Active premium access"}
+          {(profile?.subscription_tier || features.tier || "free").toLowerCase() === "free"
+            ? "Upgrade to unlock advanced features"
+            : "Active subscription plan"}
         </div>
       </div>
       
-      {(profile?.subscription_tier === "free" || !profile?.subscription_tier) ? (
+      {(profile?.subscription_tier || features.tier || "free").toLowerCase() === "free" ? (
         <button
           onClick={() => router.push("/dashboard/upgrade")}
           className="bg-[#C9A84C] text-[#1A1A2E] text-xs font-bold px-4 py-2 rounded-lg hover:opacity-90 transition-all shrink-0"
@@ -395,7 +468,7 @@ export default function ProfilePage() {
         </button>
       ) : (
         <span className="text-[10px] px-3 py-1 rounded-full bg-[#C9A84C10] text-[#C9A84C] border border-[#C9A84C20] font-bold uppercase">
-          {profile.subscription_tier}
+          {profile?.subscription_tier || features.tier}
         </span>
       )}
     </div>
@@ -723,6 +796,35 @@ export default function ProfilePage() {
             </button>
           </div>
         </div>
+
+        {/* Verification Modals */}
+        {profile && (
+          <>
+            <KycModal
+              isOpen={showKycModal}
+              onClose={() => setShowKycModal(false)}
+              userId={profile.id}
+              userRole={profile.role}
+              onSuccess={() => void fetchProfile()}
+            />
+
+            <EmailVerificationModal
+              isOpen={showEmailModal}
+              onClose={() => setShowEmailModal(false)}
+              userId={profile.id}
+              userEmail={userEmail || profile.id}
+              onSuccess={() => void fetchProfile()}
+            />
+
+            <PhoneVerificationModal
+              isOpen={showPhoneModal}
+              onClose={() => setShowPhoneModal(false)}
+              userId={profile.id}
+              initialPhone={profile.phone || ""}
+              onSuccess={() => void fetchProfile()}
+            />
+          </>
+        )}
       </div>
     </DashboardShell>
   );

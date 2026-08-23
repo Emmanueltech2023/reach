@@ -9,7 +9,9 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import TierBadge from "@/components/TierBadge";
+import VerifiedBadge from "@/components/VerifiedBadge";
 import { useCurrency } from "@/components/CurrencyProvider";
+import KycModal from "@/components/KycModal";
 
 type Project = {
   id: string;
@@ -69,6 +71,8 @@ export default function ProjectDetailPage() {
   const [loading, setLoading] = useState(true);
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentUserProfile, setCurrentUserProfile] = useState<any>(null);
+  const [showKycModal, setShowKycModal] = useState(false);
 
   useEffect(() => {
     const loadProjectData = async () => {
@@ -77,6 +81,13 @@ export default function ProjectDetailPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         setCurrentUserId(user.id);
+
+        const { data: prof } = await supabase
+          .from("profiles")
+          .select("id, role, kyc_status")
+          .eq("id", user.id)
+          .single();
+        if (prof) setCurrentUserProfile(prof);
 
         const { data: bookmark } = await supabase
           .from("bookmarks")
@@ -242,11 +253,7 @@ export default function ProjectDetailPage() {
             <div className="pb-2">
               <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-2xl font-bold tracking-tight text-[#F5F3ED]">{project.name}</h1>
-                {project.tier === "premium" && (
-                  <span className="text-[10px] uppercase tracking-wider font-bold px-2.5 py-0.5 rounded-sm bg-[#C9A84C]/10 text-[#C9A84C] border border-[#C9A84C]/30">
-                    Premium
-                  </span>
-                )}
+                <VerifiedBadge tier={project.tier || project.profiles?.subscription_tier} size={20} />
               </div>
               <div className="flex items-center gap-2 mt-2 flex-wrap text-xs text-[#A8A6B8]">
                 <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-sm ${
@@ -322,8 +329,11 @@ export default function ProjectDetailPage() {
                   <div>
                     <div className="flex items-center gap-1.5">
                       <span className="text-[#F5F3ED] text-sm font-semibold">{project.profiles?.full_name}</span>
-                      {project.profiles?.is_verified && <CheckCircle size={14} className="text-emerald-400 shrink-0" />}
-                      <TierBadge tier={(project.profiles?.subscription_tier as "free" | "pro" | "premium") || "free"} />
+                      <VerifiedBadge 
+                        tier={project.profiles?.subscription_tier || project.tier} 
+                        isVerified={project.profiles?.is_verified} 
+                        size={15} 
+                      />
                     </div>
                     <div className="text-[#5C5A70] text-xs mt-0.5">
                       @{project.profiles?.username} {project.profiles?.country && `· ${project.profiles.country}`}
@@ -394,6 +404,13 @@ export default function ProjectDetailPage() {
                     <button
                       onClick={async () => {
                         if (!currentUserId || !project) return;
+
+                        // Progressive Flow: Check KYC Verification status before initiating deal
+                        if (currentUserProfile?.kyc_status !== "approved") {
+                          setShowKycModal(true);
+                          return;
+                        }
+
                         const res = await fetch("/api/deals", {
                           method: "POST",
                           headers: { "Content-Type": "application/json" },
@@ -478,6 +495,13 @@ export default function ProjectDetailPage() {
             <button
               onClick={async () => {
                 if (!currentUserId || !project) return;
+                
+                // Progressive Flow: Check KYC Verification status before initiating deal
+                if (currentUserProfile?.kyc_status !== "approved") {
+                  setShowKycModal(true);
+                  return;
+                }
+
                 const res = await fetch("/api/deals", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
@@ -486,6 +510,8 @@ export default function ProjectDetailPage() {
                 const data = await res.json();
                 if (res.ok) {
                   router.push("/dashboard/deals");
+                } else if (data.kycRequired) {
+                  setShowKycModal(true);
                 } else {
                   alert(data.error || "Failed to initiate deal.");
                 }
@@ -516,6 +542,19 @@ export default function ProjectDetailPage() {
         )}
       </div>
 
+      {/* Progressive Flow: Action-Gated KYC Verification Modal */}
+      {currentUserId && (
+        <KycModal
+          isOpen={showKycModal}
+          onClose={() => setShowKycModal(false)}
+          userId={currentUserId}
+          userRole="investor"
+          actionContext="Identity verification required to initiate investment deal & term sheet"
+          onSuccess={() => {
+            if (currentUserProfile) setCurrentUserProfile({ ...currentUserProfile, kyc_status: "pending" });
+          }}
+        />
+      )}
     </div>
   );
 }

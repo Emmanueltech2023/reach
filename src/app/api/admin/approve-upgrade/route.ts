@@ -1,14 +1,14 @@
-import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { sendEmail, emailTemplates } from "@/lib/email";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+import { requireAdmin, adminSupabase as supabase } from "@/lib/auth-server";
 
 export async function POST(req: NextRequest) {
   try {
+    const auth = await requireAdmin(req);
+    if (!auth.success) {
+      return auth.response;
+    }
+
     const body = await req.json();
     const { requestId, userId: bodyUserId, plan: bodyPlan, action = "approve" } = body;
 
@@ -61,7 +61,9 @@ export async function POST(req: NextRequest) {
     // Update upgrade request status
     const { error: reqError } = await supabase
       .from("upgrade_requests")
-      .update({ status: "approved" })
+      .update({
+        status: "approved",
+      })
       .eq("id", requestId);
 
     if (reqError) {
@@ -90,7 +92,9 @@ export async function POST(req: NextRequest) {
         .from("profiles")
         .update({ subscription_expires_at: expiresAt.toISOString() })
         .eq("id", userId);
-    } catch {}
+    } catch (e) {
+      console.warn("Optional subscription_expires_at update skipped:", e);
+    }
 
     // Send in-app notification
     const { error: notifError } = await supabase.from("notifications").insert({

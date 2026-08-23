@@ -2,11 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { Lock, Sparkles, Zap } from "lucide-react";
-import { type Tier } from "@/hooks/useSubscription";
+import { type Tier, normalizeTier } from "@/hooks/useSubscription";
 
 interface Props {
   requiredTier: "pro" | "premium";
-  currentTier: Tier;
+  currentTier: string | Tier;
   featureName: string;
   featureDesc?: string;
   children: React.ReactNode;
@@ -45,10 +45,11 @@ export default function UpgradeGate({
   const router = useRouter();
   const config = TIER_CONFIG[requiredTier];
   const Icon = config.icon;
+  const normalized = normalizeTier(currentTier);
 
   const hasAccess =
-    currentTier === "premium" ||
-    (requiredTier === "pro" && currentTier === "pro");
+    normalized === "premium" ||
+    (requiredTier === "pro" && normalized === "pro");
 
   if (hasAccess) return <>{children}</>;
 

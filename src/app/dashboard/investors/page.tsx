@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useMemo } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
@@ -8,6 +8,9 @@ import {
   TrendingUp, MapPin, Loader2, Filter, ShieldCheck, 
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import DashboardShell from "@/components/DashboardShell";
+import TierBadge from "@/components/TierBadge";
+import VerifiedBadge from "@/components/VerifiedBadge";
 
 type Investor = {
   id: string;
@@ -23,6 +26,7 @@ type Investor = {
   total_invested: number | null;
   trust_score: number;
   banner_url: string | null;
+  subscription_tier?: string | null;
 };
 
 const AVATAR_COLORS = [
@@ -53,51 +57,41 @@ const FOCUS_FILTERS = ["All", "FinTech", "HealthTech", "DeFi", "EdTech", "AI/ML"
 
 export default function InvestorDiscoveryPage() {
   const router = useRouter();
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
   const [investors, setInvestors] = useState<Investor[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState("All");
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [profile, setProfile] = useState<{ role?: string; full_name?: string; username?: string } | null>(null);
 
   const fetchCurrentUser = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
-    if (user) setCurrentUserId(user.id);
+    if (user) {
+      setCurrentUserId(user.id);
+      const { data: prof } = await supabase
+        .from("profiles")
+        .select("role, full_name, username")
+        .eq("id", user.id)
+        .single();
+      if (prof) setProfile(prof);
+    }
   }, [supabase]);
 
-  // Wrapped in useCallback to prevent infinite render loops and dependency leakage
   const fetchInvestors = useCallback(async () => {
     setLoading(true);
-    
-    // Note: For full production mitigation against client network eavesdropping, 
-    // it is strongly recommended to handle this mapping via an API route endpoint or Postgres View.
-    const { data } = await supabase
-      .from("profiles")
-      .select("id, full_name, username, avatar_url, is_verified, country, bio, investment_focus, min_ticket_size, max_ticket_size, total_invested, trust_score, banner_url, is_anonymous")
-      .eq("role", "investor")
-      .order("created_at", { ascending: false });
-
-    const masked = (data || []).map((inv) => {
-      if (inv.is_anonymous) {
-        return {
-          ...inv,
-          full_name: "Anonymous Investor",
-          username: "anonymous",
-          avatar_url: null,
-          banner_url: null,
-          country: null,
-          linkedin: null,
-          twitter: null,
-          website: null,
-          bio: "This premium institutional investor is operating in anonymous mode.",
-        };
+    try {
+      const res = await fetch("/api/investors");
+      if (res.ok) {
+        const data = await res.json();
+        setInvestors(data.investors || []);
       }
-      return inv;
-    });
-
-    setInvestors(masked);
-    setLoading(false);
-  }, [supabase]);
+    } catch (e) {
+      console.error("Failed to load investors:", e);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     const initData = async () => {
@@ -110,16 +104,22 @@ export default function InvestorDiscoveryPage() {
   const startChat = async (investorId: string) => {
     if (!currentUserId) return;
 
-    const res = await fetch("/api/conversations/start", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        userId: currentUserId,
-        otherUserId: investorId,
-      }),
-    });
-    const { conversationId } = await res.json();
-    router.push(`/dashboard/chats?conversationId=${conversationId}`);
+    try {
+      const res = await fetch("/api/conversations/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: currentUserId,
+          otherUserId: investorId,
+        }),
+      });
+      const data = await res.json();
+      if (data.conversationId) {
+        router.push(`/dashboard/chats?conversationId=${data.conversationId}`);
+      }
+    } catch (e) {
+      console.error("Failed to start chat with investor:", e);
+    }
   };
 
   const filtered = investors.filter((inv) => {
@@ -139,28 +139,24 @@ export default function InvestorDiscoveryPage() {
   });
 
   return (
-    <div className="min-h-screen bg-[#0F0F1A] text-[#F5F3ED] antialiased">
-      <header className="sticky top-0 z-40 bg-[#0F0F1A]/90 backdrop-blur-md border-b border-[#3A3A52]/60">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <button 
-              onClick={() => router.back()} 
-              className="p-2 hover:bg-[#1A1A2E] border border-transparent hover:border-[#3A3A52]/60 rounded-xl transition-all duration-200"
-            >
-              <ArrowLeft size={18} className="text-[#A8A6B8]" />
-            </button>
-            <h1 className="text-base md:text-lg font-bold tracking-tight text-[#F5F3ED]">
+    <DashboardShell
+      role={profile?.role || "builder"}
+      fullName={profile?.full_name}
+      username={profile?.username}
+    >
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-xl font-bold tracking-tight text-[#F5F3ED]">
               Investor Directory
             </h1>
+            <p className="text-xs text-[#5C5A70] mt-0.5">
+              Connect and pitch directly to verified angels and institutional funds
+            </p>
           </div>
-          <button className="p-2 hover:bg-[#1A1A2E] border border-[#3A3A52]/60 rounded-xl transition md:hidden">
-            <Filter size={16} className="text-[#A8A6B8]" />
-          </button>
         </div>
-      </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        <div className="flex flex-col lg:flex-row gap-4 items-stretch lg:items-center justify-between bg-[#1A1A2E]/30 p-4 rounded-xl border border-[#3A3A52]/50 backdrop-blur-xs">
+        <div className="flex flex-col lg:flex-row gap-4 items-stretch lg:items-center justify-between bg-[#1A1A2E]/50 p-4 rounded-xl border border-[#3A3A52]/60">
           <div className="flex-1 max-w-md flex items-center gap-3 bg-[#0F0F1A] border border-[#3A3A52]/80 rounded-lg px-3.5 py-2.5 focus-within:border-[#C9A84C] focus-within:ring-1 focus-within:ring-[#C9A84C]/20 transition-all duration-200">
             <Search size={15} className="text-[#5C5A70] shrink-0" />
             <input
@@ -201,14 +197,14 @@ export default function InvestorDiscoveryPage() {
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-6">
               {filtered.map((inv) => (
                 <div
                   key={inv.id}
                   className="group bg-[#1A1A2E] border border-[#3A3A52] hover:border-[#5C5A70] rounded-xl overflow-hidden flex flex-col justify-between transition-all duration-300 hover:-translate-y-0.5 shadow-lg shadow-black/20"
                 >
                   <div>
-                    <div className="h-32 overflow-hidden relative border-b border-[#3A3A52]/30 bg-[#1A1A2E]">
+                    <div className="h-16 sm:h-32 overflow-hidden relative border-b border-[#3A3A52]/30 bg-[#1A1A2E]">
                       {inv.banner_url ? (
                         <Image
                           src={inv.banner_url}
@@ -223,9 +219,9 @@ export default function InvestorDiscoveryPage() {
                       <div className="absolute inset-0 bg-linear-to-t from-[#1A1A2E] via-[#1A1A2E]/40 to-black/20" />
                     </div>
 
-                    <div className="p-5 -mt-12 relative z-10">
-                      <div className="flex items-end justify-between mb-4">
-                        <div className={`w-20 h-20 rounded-2xl border-4 border-[#1A1A2E] flex items-center justify-center text-xl font-bold shrink-0 shadow-xl overflow-hidden bg-[#1A1A2E] ${getColor(inv.id)}`}>
+                    <div className="p-2.5 sm:p-5 -mt-5 sm:-mt-12 relative z-10">
+                      <div className="flex items-end justify-between mb-2 sm:mb-4">
+                        <div className={`w-10 h-10 sm:w-20 sm:h-20 rounded-xl sm:rounded-2xl border-2 sm:border-4 border-[#1A1A2E] flex items-center justify-center text-xs sm:text-xl font-bold shrink-0 shadow-xl overflow-hidden bg-[#1A1A2E] ${getColor(inv.id)}`}>
                           {inv.avatar_url ? (
                             <Image
                               src={inv.avatar_url}
@@ -242,30 +238,32 @@ export default function InvestorDiscoveryPage() {
                         
                         <button
                           onClick={() => startChat(inv.id)}
-                          className="flex items-center gap-1.5 bg-[#C9A84C] text-[#1A1A2E] text-[11px] font-bold uppercase tracking-wider px-4 py-2.5 rounded-lg hover:bg-[#b5953e] transition duration-150 shadow-md shadow-[#C9A84C]/10"
+                          className="flex items-center gap-1 sm:gap-1.5 bg-[#C9A84C] text-[#1A1A2E] text-[10px] sm:text-[11px] font-bold uppercase tracking-wider px-2 sm:px-4 py-1 sm:py-2.5 rounded-md sm:rounded-lg hover:bg-[#b5953e] transition duration-150 shadow-md shadow-[#C9A84C]/10"
                         >
-                          <MessageCircle size={13} />
-                          Pitch
+                          <MessageCircle size={12} className="sm:w-3.5 sm:h-3.5" />
+                          <span>Pitch</span>
                         </button>
                       </div>
 
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <span className="text-[#F5F3ED] text-base font-semibold truncate group-hover:text-[#C9A84C] transition duration-150">
+                      <div className="space-y-0.5 sm:space-y-1">
+                        <div className="flex items-center gap-1 sm:gap-1.5 min-w-0 flex-wrap">
+                          <span className="text-[#F5F3ED] text-xs sm:text-base font-semibold truncate group-hover:text-[#C9A84C] transition duration-150">
                             {inv.full_name}
                           </span>
-                          {inv.is_verified && (
-                            <CheckCircle size={14} className="text-emerald-400 fill-emerald-400/10 shrink-0" />
-                          )}
+                          <VerifiedBadge 
+                            tier={inv.subscription_tier} 
+                            isVerified={inv.is_verified} 
+                            size={13} 
+                          />
                         </div>
                         
-                        <div className="flex items-center flex-wrap gap-x-2 gap-y-1 text-[#5C5A70] text-[11px]">
-                          <span className="font-medium">@{inv.username}</span>
+                        <div className="flex items-center flex-wrap gap-x-1.5 text-[#5C5A70] text-[10px] sm:text-[11px]">
+                          <span className="font-medium truncate">@{inv.username}</span>
                           {inv.country && (
                             <>
-                              <span className="text-[#3A3A52] font-bold">·</span>
-                              <span className="flex items-center gap-0.5 text-[#A8A6B8]">
-                                <MapPin size={11} className="text-[#5C5A70]" />
+                              <span className="text-[#3A3A52] font-bold hidden sm:inline">·</span>
+                              <span className="hidden sm:flex items-center gap-0.5 text-[#A8A6B8]">
+                                <MapPin size={10} className="text-[#5C5A70]" />
                                 {inv.country}
                               </span>
                             </>
@@ -274,58 +272,58 @@ export default function InvestorDiscoveryPage() {
                       </div>
 
                       {inv.bio && (
-                        <p className="text-[#A8A6B8] text-xs leading-relaxed mt-4 line-clamp-2 min-h-9">
+                        <p className="text-[#A8A6B8] text-[10px] sm:text-xs leading-relaxed mt-1.5 sm:mt-4 line-clamp-2 min-h-5 sm:min-h-9">
                           {inv.bio}
                         </p>
                       )}
                     </div>
                   </div>
 
-                  <div className="px-5 pb-5 pt-3 border-t border-[#3A3A52]/30 bg-[#141426]/60">
-                    <div className="grid grid-cols-3 gap-2 text-left">
-                      <div className="bg-[#0F0F1A]/50 rounded-lg p-2 border border-[#3A3A52]/20">
-                        <div className="text-[#F5F3ED] text-[11px] font-bold truncate">
+                  <div className="px-2.5 pb-2.5 pt-1.5 sm:px-5 sm:pb-5 sm:pt-3 border-t border-[#3A3A52]/30 bg-[#141426]/60">
+                    <div className="grid grid-cols-3 gap-1 sm:gap-2 text-left">
+                      <div className="bg-[#0F0F1A]/50 rounded-md sm:rounded-lg p-1 sm:p-2 border border-[#3A3A52]/20">
+                        <div className="text-[#F5F3ED] text-[9px] sm:text-[11px] font-bold truncate">
                           {inv.min_ticket_size && inv.max_ticket_size 
                             ? `${formatCurrency(inv.min_ticket_size)}–${formatCurrency(inv.max_ticket_size)}`
                             : "—"
                           }
                         </div>
-                        <div className="text-[#5C5A70] text-[9px] uppercase tracking-wider font-bold mt-0.5">Ticket</div>
+                        <div className="text-[#5C5A70] text-[8px] sm:text-[9px] uppercase tracking-wider font-bold mt-0.5 truncate">Ticket</div>
                       </div>
 
-                      <div className="bg-[#0F0F1A]/50 rounded-lg p-2 border border-[#3A3A52]/20">
-                        <div className="text-[#C9A84C] text-[11px] font-bold flex items-center gap-0.5">
+                      <div className="bg-[#0F0F1A]/50 rounded-md sm:rounded-lg p-1 sm:p-2 border border-[#3A3A52]/20">
+                        <div className="text-[#C9A84C] text-[9px] sm:text-[11px] font-bold flex items-center gap-0.5 truncate">
                           {inv.trust_score > 0 ? (
                             <>
-                              <ShieldCheck size={11} className="text-[#C9A84C]" />
+                              <ShieldCheck size={10} className="text-[#C9A84C] shrink-0" />
                               {inv.trust_score.toFixed(1)}
                             </>
                           ) : "—"}
                         </div>
-                        <div className="text-[#5C5A70] text-[9px] uppercase tracking-wider font-bold mt-0.5">Trust</div>
+                        <div className="text-[#5C5A70] text-[8px] sm:text-[9px] uppercase tracking-wider font-bold mt-0.5 truncate">Trust</div>
                       </div>
 
-                      <div className="bg-[#0F0F1A]/50 rounded-lg p-2 border border-[#3A3A52]/20">
-                        <div className="text-[#F5F3ED] text-[11px] font-bold truncate">
+                      <div className="bg-[#0F0F1A]/50 rounded-md sm:rounded-lg p-1 sm:p-2 border border-[#3A3A52]/20">
+                        <div className="text-[#F5F3ED] text-[9px] sm:text-[11px] font-bold truncate">
                           {inv.total_invested && inv.total_invested > 0 ? formatCurrency(inv.total_invested) : "—"}
                         </div>
-                        <div className="text-[#5C5A70] text-[9px] uppercase tracking-wider font-bold mt-0.5">Invested</div>
+                        <div className="text-[#5C5A70] text-[8px] sm:text-[9px] uppercase tracking-wider font-bold mt-0.5 truncate">Invested</div>
                       </div>
                     </div>
 
                     {inv.investment_focus && inv.investment_focus.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-3.5 h-5 overflow-hidden items-center">
-                        {inv.investment_focus.slice(0, 3).map((f) => (
+                      <div className="flex flex-wrap gap-1 mt-2 sm:mt-3.5 h-4 sm:h-5 overflow-hidden items-center">
+                        {inv.investment_focus.slice(0, 2).map((f) => (
                           <span 
                             key={f}
-                            className="text-[9px] px-2 py-0.5 rounded-sm bg-[#C9A84C]/5 border border-[#C9A84C]/20 text-[#C9A84C] font-bold uppercase tracking-wider"
+                            className="text-[8px] sm:text-[9px] px-1.5 sm:px-2 py-0.5 rounded-sm bg-[#C9A84C]/5 border border-[#C9A84C]/20 text-[#C9A84C] font-bold uppercase tracking-wider truncate"
                           >
                             {f}
                           </span>
                         ))}
-                        {inv.investment_focus.length > 3 && (
-                          <span className="text-[10px] text-[#5C5A70] font-semibold pl-0.5">
-                            +{inv.investment_focus.length - 3}
+                        {inv.investment_focus.length > 2 && (
+                          <span className="text-[9px] text-[#5C5A70] font-semibold pl-0.5">
+                            +{inv.investment_focus.length - 2}
                           </span>
                         )}
                       </div>
@@ -336,7 +334,7 @@ export default function InvestorDiscoveryPage() {
             </div>
           )}
         </div>
-      </main>
-    </div>
+      </div>
+    </DashboardShell>
   );
 }

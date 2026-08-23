@@ -1,15 +1,16 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import DashboardShell from "@/components/DashboardShell";
 import TierBadge from "@/components/TierBadge";
+import { normalizeTier } from "@/hooks/useSubscription";
 import {
   CheckCircle, X, Loader2, Copy,
   Building2, Wallet, ArrowLeft,
   Sparkles, Zap, Shield,
   MessageCircle, BarChart2,
-  Eye, FileText, Star, Lock,
+  Eye, FileText, Star, Lock, Clock,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
@@ -274,6 +275,12 @@ export default function UpgradePage() {
     username: string;
     role: string;
   } | null>(null);
+  const [pendingRequest, setPendingRequest] = useState<{
+    id: string;
+    plan: string;
+    reference: string;
+    created_at: string;
+  } | null>(null);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [step, setStep] = useState<"plans" | "payment" | "confirm">("plans");
   const [paymentMethod, setPaymentMethod] = useState<"bank" | "usdt">("bank");
@@ -284,8 +291,8 @@ export default function UpgradePage() {
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchProfile = async () => {
+  const fetchProfileAndRequests = useCallback(async () => {
+    try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
@@ -297,11 +304,84 @@ export default function UpgradePage() {
 
       if (data) {
         setProfile(data);
-        setCurrentTier(data.subscription_tier || "free");
+        const resolved = normalizeTier(data.subscription_tier);
+        setCurrentTier(resolved);
+      }
+
+      // Check for pending upgrade request
+      const reqRes = await fetch("/api/upgrade/request");
+      if (reqRes.ok) {
+        const reqData = await reqRes.json();
+        if (reqData.request && reqData.request.status === "pending") {
+          setPendingRequest(reqData.request);
+        } else {
+          setPendingRequest(null);
+        }
+      }
+    } catch (e) {
+      console.error("Error loading profile / upgrade requests:", e);
+    }
+  }, [supabase]);
+
+  useEffect(() => {
+    void fetchProfileAndRequests();
+
+    let channel: any;
+    const setupRealtime = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      channel = supabase
+        .channel(`upgrade-page-${user.id}-${Date.now()}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "profiles",
+            filter: `id=eq.${user.id}`,
+          },
+          (payload: any) => {
+            if (payload.new && payload.new.subscription_tier !== undefined) {
+              const updatedTier = normalizeTier(payload.new.subscription_tier);
+              setCurrentTier(updatedTier);
+              setPendingRequest(null);
+              if (typeof window !== "undefined") {
+                window.dispatchEvent(
+                  new CustomEvent("subscription-updated", {
+                    detail: { tier: updatedTier, subscription_tier: updatedTier },
+                  })
+                );
+              }
+            }
+          }
+        )
+        .subscribe();
+    };
+
+    void setupRealtime();
+
+    const handleSubscriptionEvent = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.tier || detail?.subscription_tier) {
+        const updatedTier = normalizeTier(detail.tier || detail.subscription_tier);
+        setCurrentTier(updatedTier);
       }
     };
-    fetchProfile();
-  }, [supabase]);
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("subscription-updated", handleSubscriptionEvent);
+    }
+
+    return () => {
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+      if (typeof window !== "undefined") {
+        window.removeEventListener("subscription-updated", handleSubscriptionEvent);
+      }
+    };
+  }, [supabase, fetchProfileAndRequests]);
 
   // Derive tiers and selectedTier AFTER profile is loaded
   const TIERS = profile?.role === "talent" ? TALENT_TIERS : profile?.role === "builder" ? BUILDER_TIERS : INVESTOR_TIERS;
@@ -347,6 +427,7 @@ export default function UpgradePage() {
 
     setSubmitted(true);
     setSubmitting(false);
+    void fetchProfileAndRequests();
   };
 
   // Success screen
@@ -381,7 +462,9 @@ export default function UpgradePage() {
             <button
               onClick={() =>
                 router.push(
-                  profile?.role === "builder"
+                  profile?.role === "talent"
+                    ? "/dashboard/talent"
+                    : profile?.role === "builder"
                     ? "/dashboard/builder"
                     : "/dashboard/investor"
                 )
@@ -422,7 +505,9 @@ export default function UpgradePage() {
             <Shield size={20} className="text-[#C9A84C]" />
             <h1 className="text-[#F5F3ED] text-2xl font-medium">
               {step === "plans"
-                ? profile?.role === "builder"
+                ? profile?.role === "talent"
+                  ? "Upgrade your talent plan"
+                  : profile?.role === "builder"
                   ? "Upgrade your builder plan"
                   : "Upgrade your investor plan"
                 : step === "payment"
@@ -432,7 +517,9 @@ export default function UpgradePage() {
           </div>
           <p className="text-[#5C5A70] text-sm">
             {step === "plans"
-              ? profile?.role === "builder"
+              ? profile?.role === "talent"
+                ? "Stand out with recruiter priority, verified Pro badge, and direct hiring manager messaging"
+                : profile?.role === "builder"
                 ? "Get more listings, analytics, and visibility with investors"
                 : "Unlock AI matching, deal access, and anonymous browsing"
               : step === "payment"
@@ -480,6 +567,32 @@ export default function UpgradePage() {
         {/* ── STEP: PLANS ── */}
         {step === "plans" && (
           <>
+            {/* Pending Request Alert */}
+            {pendingRequest && (
+              <div className="mb-8 p-4 md:p-5 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-4 text-left shadow-lg">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center shrink-0">
+                  <Clock className="text-amber-400" size={20} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-sm font-bold text-[#F5F3ED]">
+                      Payment Verification Pending ({pendingRequest.plan.toUpperCase()})
+                    </h3>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 uppercase font-bold">
+                      Under Admin Review
+                    </span>
+                  </div>
+                  <p className="text-xs text-[#A8A6B8] mt-1 leading-relaxed">
+                    Your upgrade request submitted on{" "}
+                    <span className="text-[#F5F3ED]">
+                      {new Date(pendingRequest.created_at).toLocaleDateString()}
+                    </span>{" "}
+                    (Reference: <span className="font-mono text-[#C9A84C] font-semibold">{pendingRequest.reference}</span>) is awaiting admin verification. Your features will activate immediately once confirmed.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Feature icons strip */}
             <div className="grid grid-cols-3 gap-3 mb-8">
               {FEATURE_ICONS.map((f) => {
@@ -510,12 +623,18 @@ export default function UpgradePage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {TIERS.map((tier) => {
                 const isCurrent = currentTier === tier.id;
+                const isPendingForThisTier = pendingRequest?.plan === tier.id;
+                const isDowngrade = currentTier === "premium" && tier.id === "pro";
 
                 return (
                   <div
                     key={tier.id}
                     className={`relative rounded-2xl border-2 overflow-hidden transition flex flex-col ${
-                      isCurrent ? "border-emerald-800" : tier.color
+                      isCurrent
+                        ? "border-emerald-700 shadow-emerald-950/40 shadow-lg"
+                        : isPendingForThisTier
+                        ? "border-amber-500/60 shadow-amber-950/30 shadow-lg"
+                        : tier.color
                     }`}
                   >
                     {tier.popular && (
@@ -534,11 +653,15 @@ export default function UpgradePage() {
                             Free
                           </span>
                         )}
-                        {isCurrent && (
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-900/30 text-emerald-400 border border-emerald-800">
-                            Active
+                        {isCurrent ? (
+                          <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-900/40 text-emerald-400 border border-emerald-700 font-semibold">
+                            Active Plan
                           </span>
-                        )}
+                        ) : isPendingForThisTier ? (
+                          <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-semibold flex items-center gap-1">
+                            <Clock size={10} /> Pending
+                          </span>
+                        ) : null}
                       </div>
                       <div className="flex items-baseline gap-1 mb-1">
                         <span className="text-3xl font-medium text-[#F5F3ED]">
@@ -579,8 +702,16 @@ export default function UpgradePage() {
                     {/* CTA */}
                     <div className="p-4 bg-[#0F0F1A] border-t border-[#3A3A52]">
                       {isCurrent ? (
-                        <div className="w-full text-center text-xs text-emerald-400 py-2">
-                          ✓ Your current plan
+                        <div className="w-full text-center text-xs text-emerald-400 font-semibold py-2">
+                          ✓ Currently Active
+                        </div>
+                      ) : isPendingForThisTier ? (
+                        <div className="w-full text-center text-xs text-amber-300 py-2 bg-amber-500/10 border border-amber-500/30 rounded-lg font-medium">
+                          ⏳ Verification Pending
+                        </div>
+                      ) : isDowngrade ? (
+                        <div className="w-full text-center text-xs text-[#5C5A70] py-2">
+                          Included in Premium
                         </div>
                       ) : tier.id === "free" ? (
                         <div className="w-full text-center text-xs text-[#5C5A70] py-2">

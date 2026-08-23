@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
 
     const { data, error } = await supabase
       .from("community_comments")
-      .select(`*, profiles(full_name, username, is_verified, avatar_url)`)
+      .select(`*, profiles(id, full_name, username, is_verified, avatar_url, subscription_tier, role)`)
       .eq("post_id", postId)
       .eq("is_approved", true)
       .order("created_at", { ascending: true });
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
         is_anonymous: isAnonymous || false,
         is_approved: true,
       })
-      .select(`*, profiles(full_name, username, is_verified, avatar_url)`)
+      .select(`*, profiles(id, full_name, username, is_verified, avatar_url, subscription_tier, role)`)
       .maybeSingle();
 
     if (error) {

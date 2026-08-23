@@ -64,6 +64,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
+    // 1. Enforce Server-Side KYC Verification Gate
+    const { data: investorProfile } = await supabase
+      .from("profiles")
+      .select("kyc_status")
+      .eq("id", investorId)
+      .single();
+
+    if (investorProfile?.kyc_status !== "approved") {
+      return NextResponse.json(
+        {
+          error: "Identity verification (KYC) is required before initiating investment deals.",
+          kycRequired: true,
+        },
+        { status: 403 }
+      );
+    }
+
     // 2. Add Tier Enforcement Check
     const tier = await getUserTier(investorId);
     if (!tierCanDo(tier, "canAccessDeals")) {

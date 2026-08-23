@@ -118,14 +118,16 @@ export async function POST(req: NextRequest) {
         }
       }
 
-    // 3. Proceed with Insertion
+    // 3. Proceed with Insertion (normalize to allowed 'text' | 'file' | 'system')
+    const validType = ["text", "file", "system"].includes(messageType) ? messageType : "text";
+
     const { data, error } = await supabase
       .from("messages")
       .insert({
         conversation_id: conversationId,
         sender_id: senderId,
         content,
-        message_type: messageType,
+        message_type: validType,
         delivery_status: "sent",
         deal_id: dealId,
       })
@@ -136,7 +138,8 @@ export async function POST(req: NextRequest) {
           full_name,
           username,
           avatar_url,
-          is_verified
+          is_verified,
+          subscription_tier
         )
       `)
       .single();
@@ -196,6 +199,101 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ message: data });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function PATCH(req: NextRequest) {
+  try {
+    const { messageId, senderId, content } = await req.json();
+
+    if (!messageId || !senderId || !content?.trim()) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+
+    // Verify sender ownership
+    const { data: existing, error: findError } = await supabase
+      .from("messages")
+      .select("id, sender_id, message_type")
+      .eq("id", messageId)
+      .single();
+
+    if (findError || !existing) {
+      return NextResponse.json({ error: "Message not found" }, { status: 404 });
+    }
+
+    if (existing.sender_id !== senderId) {
+      return NextResponse.json({ error: "Unauthorized to edit this message" }, { status: 403 });
+    }
+
+    // Run moderation
+    const modData = moderateContent(content);
+    if (modData.flagged && !modData.warningOnly) {
+      return NextResponse.json({ error: modData.reason, moderated: true }, { status: 422 });
+    }
+
+    const { data: updated, error: updateError } = await supabase
+      .from("messages")
+      .update({
+        content: content.trim(),
+        is_edited: true,
+      })
+      .eq("id", messageId)
+      .select(`*, profiles(id, full_name, username, avatar_url, is_verified, subscription_tier)`)
+      .single();
+
+    if (updateError) throw updateError;
+
+    return NextResponse.json({ message: updated });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to edit message";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const { messageId, senderId } = await req.json();
+
+    if (!messageId || !senderId) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+
+    // Verify sender ownership
+    const { data: existing, error: findError } = await supabase
+      .from("messages")
+      .select("id, sender_id")
+      .eq("id", messageId)
+      .single();
+
+    if (findError || !existing) {
+      return NextResponse.json({ error: "Message not found" }, { status: 404 });
+    }
+
+    if (existing.sender_id !== senderId) {
+      return NextResponse.json({ error: "Unauthorized to delete this message" }, { status: 403 });
+    }
+
+    // Mark as deleted (soft delete preserving conversation flow)
+    const { data: deleted, error: delError } = await supabase
+      .from("messages")
+      .update({
+        content: "This message was deleted",
+        is_deleted: true,
+        file_url: null,
+      })
+      .eq("id", messageId)
+      .select()
+      .single();
+
+    if (delError) {
+      // Fallback to hard delete if is_deleted column doesn't exist
+      await supabase.from("messages").delete().eq("id", messageId);
+    }
+
+    return NextResponse.json({ success: true, messageId, message: deleted });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to delete message";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

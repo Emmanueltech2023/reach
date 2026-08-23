@@ -1,13 +1,13 @@
-import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
+import { requireAdmin, adminSupabase as supabase } from "@/lib/auth-server";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    const auth = await requireAdmin(req);
+    if (!auth.success) {
+      return auth.response;
+    }
+
     const { data: projects, error } = await supabase
       .from("projects")
       .select("*, profiles:founder_id(id, full_name, username, avatar_url, is_verified)")
@@ -23,6 +23,11 @@ export async function GET() {
 
 export async function PATCH(req: NextRequest) {
   try {
+    const auth = await requireAdmin(req);
+    if (!auth.success) {
+      return auth.response;
+    }
+
     const { projectId, updates } = await req.json();
 
     if (!projectId || !updates) {
@@ -46,6 +51,11 @@ export async function PATCH(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
+    const auth = await requireAdmin(req);
+    if (!auth.success) {
+      return auth.response;
+    }
+
     const { projectId } = await req.json();
 
     if (!projectId) {

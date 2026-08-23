@@ -1,24 +1,21 @@
-import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+import { requireAuth, adminSupabase as supabase } from "@/lib/auth-server";
 
 export async function GET(req: NextRequest) {
   try {
-    const { searchParams } = new URL(req.url);
-    const userId = searchParams.get('userId');
-
-    if (!userId) {
-      return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
+    const auth = await requireAuth(req);
+    if (!auth.success) {
+      return auth.response;
     }
+
+    const { searchParams } = new URL(req.url);
+    const requestedUserId = searchParams.get('userId');
+    const targetUserId = (auth.profile.role === 'admin' && requestedUserId) ? requestedUserId : auth.user.id;
 
     const { data, error } = await supabase
       .from('job_bookmarks')
       .select('*, jobs(*)')
-      .eq('user_id', userId);
+      .eq('user_id', targetUserId);
 
     if (error) throw error;
     return NextResponse.json(data);
@@ -29,15 +26,26 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { userId, jobId } = body;
+    const auth = await requireAuth(req);
+    if (!auth.success) {
+      return auth.response;
+    }
 
-    const { data: existing, error: findError } = await supabase
+    const body = await req.json();
+    const { jobId } = body;
+
+    if (!jobId) {
+      return NextResponse.json({ error: 'Missing jobId parameter' }, { status: 400 });
+    }
+
+    const userId = auth.user.id;
+
+    const { data: existing } = await supabase
       .from('job_bookmarks')
       .select('id')
       .eq('user_id', userId)
       .eq('job_id', jobId)
-      .single();
+      .maybeSingle();
 
     if (existing) {
       const { error } = await supabase

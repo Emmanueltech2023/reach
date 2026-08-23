@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import TierGate from "@/components/TierGate";
+import { useSubscription, normalizeTier } from "@/hooks/useSubscription";
 
 type Deal = {
   id: string;
@@ -112,6 +113,7 @@ function timeAgo(dateStr: string) {
 export default function DealsPage() {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
+  const { features, tier } = useSubscription();
   const [deals, setDeals] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<{
@@ -581,11 +583,11 @@ export default function DealsPage() {
       fullName={profile?.full_name}
       username={profile?.username}
     >
-      {profile && !["pro", "premium"].includes(profile.subscription_tier || "free") ? (
+      {!features.canAccessDeals && tier === "free" ? (
         <div className="max-w-3xl mx-auto">
           <TierGate
             requiredTier="pro"
-            currentTier={profile.subscription_tier || "free"}
+            currentTier={tier}
             featureName="Deal Pipeline"
             featureDesc="Track investment deals from NDA to close. Manage term sheets, agreements, and commission tracking. Upgrade to Pro to access your deal pipeline."
           >

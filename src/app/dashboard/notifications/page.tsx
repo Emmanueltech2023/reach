@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import DashboardShell from "@/components/DashboardShell";
 import {
   Bell, MessageCircle, Calendar, TrendingUp,
-  ShieldCheck, Star, Info, Loader2, CheckCheck, Briefcase
+  ShieldCheck, Star, Info, Loader2, CheckCheck, Briefcase,
+  Trash2
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
@@ -82,23 +83,6 @@ export default function NotificationsPage() {
       const res = await fetch(targetUrl);
       
       if (!res.ok) {
-        let errorPayload: unknown = null;
-        try {
-          errorPayload = await res.json();
-        } catch {
-          try {
-            errorPayload = await res.text();
-          } catch {
-            errorPayload = "Could not parse error response body text.";
-          }
-        }
-
-        console.error("❌ --- API DIAGNOSTIC FAILURE BREAKDOWN --- ❌");
-        console.error(`• Endpoint: ${targetUrl}`);
-        console.error(`• Status Code: ${res.status} (${res.statusText})`);
-        console.error("• Server Payload:", errorPayload);
-        console.error("---------------------------------------------");
-
         throw new Error(`Server returned ${res.status}: ${res.statusText}`);
       }
       
@@ -148,7 +132,6 @@ export default function NotificationsPage() {
   const markAllRead = async () => {
     if (!currentUserId) return;
     try {
-      // 💡 Optimistic UI adjustment: drop clear indicator to 0 instantly
       setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
 
       await fetch("/api/notifications", {
@@ -158,7 +141,7 @@ export default function NotificationsPage() {
       });
     } catch (err) {
       console.error("Error executing patch action logic markAllRead:", err);
-      fetchData(); // Sync fallback update if server requests drop out
+      fetchData();
     }
   };
 
@@ -181,7 +164,34 @@ export default function NotificationsPage() {
     }
   };
 
+  const deleteNotification = async (notificationId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      setNotifications((prev) => prev.filter((n) => n.id !== notificationId));
+      await fetch(`/api/notifications?notificationId=${notificationId}`, {
+        method: "DELETE",
+      });
+    } catch (err) {
+      console.error("Error deleting notification:", err);
+      fetchData();
+    }
+  };
+
+  const clearReadNotifications = async () => {
+    if (!currentUserId) return;
+    try {
+      setNotifications((prev) => prev.filter((n) => !n.is_read));
+      await fetch(`/api/notifications?userId=${currentUserId}&onlyRead=true`, {
+        method: "DELETE",
+      });
+    } catch (err) {
+      console.error("Error clearing read notifications:", err);
+      fetchData();
+    }
+  };
+
   const unreadCount = notifications.filter((n) => !n.is_read).length;
+  const readCount = notifications.filter((n) => n.is_read).length;
 
   return (
     <DashboardShell 
@@ -191,7 +201,7 @@ export default function NotificationsPage() {
       <div className="max-w-3xl mx-auto space-y-6">
         
         {/* Header Title Section */}
-        <div className="flex items-center justify-between border-b border-[#3A3A52] pb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#3A3A52] pb-4 gap-3">
           <div className="flex items-center gap-3">
             <Bell className="text-[#C9A84C]" size={24} />
             <h1 className="text-xl font-semibold text-[#F5F3ED]">Notifications</h1>
@@ -202,22 +212,34 @@ export default function NotificationsPage() {
             )}
           </div>
           
-          {unreadCount > 0 && (
-            <button
-              onClick={markAllRead}
-              className="flex items-center gap-2 text-xs font-medium text-[#A8A6B8] hover:text-[#C9A84C] transition bg-[#1A1A2E] border border-[#3A3A52] px-3 py-1.5 rounded-lg"
-            >
-              <CheckCheck size={14} />
-              Mark all as read
-            </button>
-          )}
+          <div className="flex items-center gap-2 flex-wrap">
+            {unreadCount > 0 && (
+              <button
+                onClick={markAllRead}
+                className="flex items-center gap-1.5 text-xs font-medium text-[#A8A6B8] hover:text-[#C9A84C] transition bg-[#1A1A2E] border border-[#3A3A52] px-3 py-1.5 rounded-lg"
+              >
+                <CheckCheck size={14} />
+                Mark all as read
+              </button>
+            )}
+
+            {readCount > 0 && (
+              <button
+                onClick={clearReadNotifications}
+                className="flex items-center gap-1.5 text-xs font-medium text-[#A8A6B8] hover:text-red-400 transition bg-[#1A1A2E] border border-[#3A3A52] px-3 py-1.5 rounded-lg"
+              >
+                <Trash2 size={13} />
+                Clear read ({readCount})
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Content Body Area */}
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-3 text-[#A8A6B8]">
             <Loader2 className="animate-spin text-[#C9A84C]" size={32} />
-            <p className="text-sm">Synchronizing dashboard activity feed...</p>
+            <p className="text-sm">Synchronizing activity feed...</p>
           </div>
         ) : notifications.length === 0 ? (
           <div className="text-center py-16 border border-dashed border-[#3A3A52] rounded-xl bg-[#11111F]">
@@ -235,19 +257,19 @@ export default function NotificationsPage() {
                 <div
                   key={notif.id}
                   onClick={() => markRead(notif.id, notif.action_url)}
-                  className={`flex items-start gap-4 p-4 rounded-xl border transition text-left cursor-pointer ${
+                  className={`group relative flex items-start gap-4 p-4 rounded-xl border transition text-left cursor-pointer ${
                     notif.is_read
-                      ? "bg-[#11111F]/40 border-[#222235] opacity-75 hover:bg-[#11111F]"
+                      ? "bg-[#11111F]/40 border-[#222235] opacity-80 hover:bg-[#11111F] hover:border-[#3A3A52]"
                       : "bg-[#161629] border-[#3A3A52] hover:border-[#C9A84C50]"
                   }`}
                 >
-                  {/* Categorized Visual Badge Icon container */}
+                  {/* Categorized Visual Badge Icon */}
                   <div className={`p-2.5 rounded-lg shrink-0 ${cfg.bg} ${cfg.color}`}>
                     <IconComp size={18} />
                   </div>
 
                   {/* Message Copy */}
-                  <div className="flex-1 min-w-0 space-y-0.5">
+                  <div className="flex-1 min-w-0 space-y-0.5 pr-8">
                     <div className="flex items-center justify-between gap-4">
                       <p className={`text-sm font-medium truncate ${notif.is_read ? "text-[#A8A6B8]" : "text-[#F5F3ED]"}`}>
                         {notif.title}
@@ -261,10 +283,19 @@ export default function NotificationsPage() {
                     </p>
                   </div>
 
-                  {/* Unread dot layout node indicator */}
-                  {!notif.is_read && (
-                    <div className="w-2 h-2 rounded-full bg-[#C9A84C] mt-2 shrink-0 animate-pulse" />
-                  )}
+                  {/* Right side indicators & Delete action */}
+                  <div className="flex items-center gap-2 shrink-0 self-center">
+                    {!notif.is_read && (
+                      <div className="w-2 h-2 rounded-full bg-[#C9A84C] animate-pulse" />
+                    )}
+                    <button
+                      onClick={(e) => deleteNotification(notif.id, e)}
+                      title="Delete notification"
+                      className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-[#5C5A70] hover:text-red-400 hover:bg-[#2A2A3E] transition duration-150"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
                 </div>
               );
             })}

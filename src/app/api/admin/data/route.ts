@@ -1,13 +1,26 @@
-import { createClient } from "@supabase/supabase-js";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { requireAdmin, adminSupabase as supabase } from "@/lib/auth-server";
+import { logActivity } from "@/lib/activity-logger";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    const auth = await requireAdmin(req);
+    if (!auth.success) {
+      return auth.response;
+    }
+
+    // Automatically record real-time audit telemetry for admin access
+    void logActivity({
+      actorId: auth.user.id,
+      actorName: auth.profile.full_name || auth.profile.username || "Admin User",
+      actorEmail: auth.user.email,
+      actorRole: "admin",
+      actionType: "ADMIN_ACCESS",
+      description: "Accessed Enterprise Command Center & telemetry services",
+      ipAddress: req.headers.get("x-forwarded-for")?.split(",")[0] || "127.0.0.1",
+      userAgent: req.headers.get("user-agent") || undefined,
+    }).catch(() => {});
+
     const [
       { data: profiles, error: profError },
       { data: upgrades, error: upError },

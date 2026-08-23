@@ -1,17 +1,12 @@
-import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+import { requireAuth, adminSupabase as supabase } from "@/lib/auth-server";
 
 export async function GET(req: NextRequest, props: { params: Promise<{ id: string }> }) {
   try {
     const params = await props.params;
     const { data, error } = await supabase
       .from('jobs')
-      .select('*, profiles(full_name, avatar_url, is_verified)')
+      .select('*, profiles(id, full_name, username, avatar_url, is_verified, subscription_tier, role)')
       .eq('id', params.id)
       .single();
 
@@ -24,15 +19,23 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
 
 export async function PATCH(req: NextRequest, props: { params: Promise<{ id: string }> }) {
   try {
+    const auth = await requireAuth(req);
+    if (!auth.success) {
+      return auth.response;
+    }
+
     const params = await props.params;
     const body = await req.json();
     const { postedBy, ...updates } = body;
     
     const { data: job, error: jobError } = await supabase.from('jobs').select('posted_by').eq('id', params.id).single();
-    if (jobError || !job) throw new Error('Job not found');
+    if (jobError || !job) {
+      return NextResponse.json({ error: 'Job not found' }, { status: 404 });
+    }
     
-    if (postedBy && job.posted_by !== postedBy) {
-       throw new Error('Unauthorized');
+    // Only job creator or admin can update
+    if (job.posted_by !== auth.user.id && auth.profile.role !== 'admin') {
+      return NextResponse.json({ error: 'Unauthorized: You can only edit jobs you posted.' }, { status: 403 });
     }
     
     const { data, error } = await supabase
@@ -51,7 +54,23 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
 
 export async function DELETE(req: NextRequest, props: { params: Promise<{ id: string }> }) {
   try {
+    const auth = await requireAuth(req);
+    if (!auth.success) {
+      return auth.response;
+    }
+
     const params = await props.params;
+    
+    const { data: job, error: jobError } = await supabase.from('jobs').select('posted_by').eq('id', params.id).single();
+    if (jobError || !job) {
+      return NextResponse.json({ error: 'Job not found' }, { status: 404 });
+    }
+
+    // Only job creator or admin can delete
+    if (job.posted_by !== auth.user.id && auth.profile.role !== 'admin') {
+      return NextResponse.json({ error: 'Unauthorized: You can only delete jobs you posted.' }, { status: 403 });
+    }
+
     const { data, error } = await supabase
       .from('jobs')
       .update({ is_published: false })
@@ -60,7 +79,7 @@ export async function DELETE(req: NextRequest, props: { params: Promise<{ id: st
       .single();
 
     if (error) throw error;
-    return NextResponse.json(data);
+    return NextResponse.json({ success: true, data });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

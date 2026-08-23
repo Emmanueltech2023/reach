@@ -47,7 +47,8 @@ export async function GET(req: NextRequest) {
             avatar_url,
             is_verified,
             subscription_tier,
-            trust_score
+            trust_score,
+            role
           )
         )
       `)

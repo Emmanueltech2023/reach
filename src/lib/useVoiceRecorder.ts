@@ -25,7 +25,22 @@ export function useVoiceRecorder() {
       });
       
       activeStream.current = stream;
-      mediaRecorder.current = new MediaRecorder(stream);
+
+      // Select supported mimeType
+      let selectedMimeType = "audio/webm";
+      if (typeof MediaRecorder !== "undefined") {
+        if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
+          selectedMimeType = "audio/webm;codecs=opus";
+        } else if (MediaRecorder.isTypeSupported("audio/webm")) {
+          selectedMimeType = "audio/webm";
+        } else if (MediaRecorder.isTypeSupported("audio/mp4")) {
+          selectedMimeType = "audio/mp4";
+        } else if (MediaRecorder.isTypeSupported("audio/ogg;codecs=opus")) {
+          selectedMimeType = "audio/ogg;codecs=opus";
+        }
+      }
+
+      mediaRecorder.current = new MediaRecorder(stream, selectedMimeType ? { mimeType: selectedMimeType } : undefined);
 
       mediaRecorder.current.ondataavailable = (e) => {
         if (e.data.size > 0) chunks.current.push(e.data);
@@ -42,7 +57,8 @@ export function useVoiceRecorder() {
           setAudioBlob(null);
           setDuration(0);
         } else {
-          const blob = new Blob(chunks.current, { type: "audio/webm" });
+          const finalMime = selectedMimeType || "audio/webm";
+          const blob = new Blob(chunks.current, { type: finalMime });
           setAudioBlob(blob);
         }
       };

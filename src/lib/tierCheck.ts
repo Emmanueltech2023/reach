@@ -7,6 +7,14 @@ const supabase = createClient(
 
 export type Tier = "free" | "pro" | "premium";
 
+export function normalizeTier(tierStr?: string | null): Tier {
+  if (!tierStr) return "free";
+  const t = tierStr.toLowerCase().trim();
+  if (t === "premium") return "premium";
+  if (t === "pro") return "pro";
+  return "free";
+}
+
 export const TIER_RULES = {
   free: {
     maxProjects: 1,
@@ -58,15 +66,15 @@ export async function getUserTier(userId: string): Promise<Tier> {
 
   if (!data) return "free";
 
-  const tier = (data.subscription_tier as Tier) || "free";
-  return tier;
+  return normalizeTier(data.subscription_tier);
 }
 
-export function getTierRules(tier: Tier) {
-  return TIER_RULES[tier] || TIER_RULES.free;
+export function getTierRules(tier: string | Tier) {
+  const normalized = normalizeTier(tier);
+  return TIER_RULES[normalized] || TIER_RULES.free;
 }
 
-export function tierCanDo(tier: Tier, action: keyof typeof TIER_RULES.free): boolean {
+export function tierCanDo(tier: string | Tier, action: keyof typeof TIER_RULES.free): boolean {
   const rules = getTierRules(tier);
   const val = rules[action];
   if (typeof val === "boolean") return val;

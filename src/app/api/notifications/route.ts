@@ -82,3 +82,53 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: safeError.message }, { status: 500 });
   }
 }
+
+// 🗑️ 3. HANDLE DELETE: Delete a single notification or clear all read notifications
+export async function DELETE(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const notificationId = searchParams.get("notificationId");
+    const userId = searchParams.get("userId");
+    const onlyRead = searchParams.get("onlyRead") === "true";
+
+    // Case A: Delete specific notification
+    if (notificationId) {
+      const { error } = await supabase
+        .from("notifications")
+        .delete()
+        .eq("id", notificationId);
+
+      if (error) throw error;
+      return NextResponse.json({ success: true, deleted: notificationId });
+    }
+
+    // Case B: Clear read notifications for a user
+    if (userId && onlyRead) {
+      const { error } = await supabase
+        .from("notifications")
+        .delete()
+        .eq("user_id", userId)
+        .eq("is_read", true);
+
+      if (error) throw error;
+      return NextResponse.json({ success: true, clearedRead: true });
+    }
+
+    // Case C: Clear all notifications for a user
+    if (userId) {
+      const { error } = await supabase
+        .from("notifications")
+        .delete()
+        .eq("user_id", userId);
+
+      if (error) throw error;
+      return NextResponse.json({ success: true, clearedAll: true });
+    }
+
+    return NextResponse.json({ error: "Missing notificationId or userId" }, { status: 400 });
+  } catch (error: unknown) {
+    const safeError = error instanceof Error ? error : new Error(String(error));
+    console.error("🚨 DELETE NOTIFICATION ERROR:", safeError);
+    return NextResponse.json({ error: safeError.message }, { status: 500 });
+  }
+}
