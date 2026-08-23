@@ -768,6 +768,8 @@ export default function JobDetailPage() {
             </div>
           </div>
         </div>
+      )}
+
       {/* Progressive Flow: Action-Gated KYC Verification Modal */}
       {userId && (
         <KycModal
