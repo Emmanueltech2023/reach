@@ -83,6 +83,7 @@ export async function POST(req: NextRequest) {
 
       // Log activity
       void logActivity({
+        req,
         actorId: auth.user.id,
         actorName: auth.profile.full_name || auth.profile.username || "Admin",
         actorEmail: auth.user.email,
@@ -90,8 +91,6 @@ export async function POST(req: NextRequest) {
         actionType: "DELETE_FLAGGED_MESSAGE",
         targetId: messageId,
         description: `Deleted flagged message ${messageId}`,
-        ipAddress: req.headers.get("x-forwarded-for")?.split(",")[0] || "127.0.0.1",
-        userAgent: req.headers.get("user-agent") || undefined,
       }).catch(() => {});
 
       return NextResponse.json({ success: true });
@@ -115,6 +114,7 @@ export async function POST(req: NextRequest) {
 
       // Log activity
       void logActivity({
+        req,
         actorId: auth.user.id,
         actorName: auth.profile.full_name || auth.profile.username || "Admin",
         actorEmail: auth.user.email,
@@ -122,8 +122,6 @@ export async function POST(req: NextRequest) {
         actionType: "WARN_USER",
         targetId: targetUserId,
         description: `Issued official messaging moderation warning to user ${targetUserId}`,
-        ipAddress: req.headers.get("x-forwarded-for")?.split(",")[0] || "127.0.0.1",
-        userAgent: req.headers.get("user-agent") || undefined,
       }).catch(() => {});
 
       return NextResponse.json({ success: true });

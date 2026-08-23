@@ -11,14 +11,13 @@ export async function GET(req: NextRequest) {
 
     // Automatically record real-time audit telemetry for admin access
     void logActivity({
+      req,
       actorId: auth.user.id,
       actorName: auth.profile.full_name || auth.profile.username || "Admin User",
       actorEmail: auth.user.email,
       actorRole: "admin",
       actionType: "ADMIN_ACCESS",
       description: "Accessed Enterprise Command Center & telemetry services",
-      ipAddress: req.headers.get("x-forwarded-for")?.split(",")[0] || "127.0.0.1",
-      userAgent: req.headers.get("user-agent") || undefined,
     }).catch(() => {});
 
     const [

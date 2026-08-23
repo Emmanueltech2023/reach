@@ -59,6 +59,7 @@ export async function POST(req: NextRequest) {
 
       // Log activity
       void logActivity({
+        req,
         actorId: auth.user.id,
         actorName: auth.profile.full_name || auth.profile.username || "Admin",
         actorEmail: auth.user.email,
@@ -66,8 +67,6 @@ export async function POST(req: NextRequest) {
         actionType: "UPDATE_COMMISSION_INVOICE",
         targetId: invoiceId,
         description: `Updated commission invoice ${invoiceId} status to ${status}`,
-        ipAddress: req.headers.get("x-forwarded-for")?.split(",")[0] || "127.0.0.1",
-        userAgent: req.headers.get("user-agent") || undefined,
       }).catch(() => {});
 
       return NextResponse.json({ success: true, invoice: updated });

@@ -55,14 +55,13 @@ export async function POST(req: NextRequest) {
 
     // Log admin broadcast activity
     void logActivity({
+      req,
       actorId: auth.user.id,
       actorName: auth.profile.full_name || auth.profile.username || "Admin",
       actorEmail: auth.user.email,
       actorRole: "admin",
       actionType: "BROADCAST_NOTIFICATION",
       description: `Dispatched system broadcast "${title}" to ${targetProfiles.length} users (Target: ${target})`,
-      ipAddress: req.headers.get("x-forwarded-for")?.split(",")[0] || "127.0.0.1",
-      userAgent: req.headers.get("user-agent") || undefined,
     }).catch(() => {});
 
     return NextResponse.json({ success: true, count: targetProfiles.length });
