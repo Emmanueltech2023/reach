@@ -64,7 +64,9 @@ export async function POST(req: NextRequest) {
     });
 
     if (action === "approve") {
-      await supabase.from("trust_events").insert({ user_id: userId, event_type: "kyc_verified", points: 20 }).catch(() => {});
+      try {
+        await supabase.from("trust_events").insert({ user_id: userId, event_type: "kyc_verified", points: 20 });
+      } catch {}
     }
 
     // Email

@@ -64,7 +64,7 @@ export async function middleware(request: NextRequest) {
     try {
       const { data: profile } = await adminClient
         .from("profiles")
-        .select("role")
+        .select("role, is_banned")
         .eq("id", user.id)
         .maybeSingle();
 

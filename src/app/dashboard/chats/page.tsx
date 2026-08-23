@@ -114,7 +114,7 @@ function ChatsInner() {
   } = useVoiceRecorder();
 
   // Auth
-  const [currentUser, setCurrentUser] = useState<{ id: string; full_name: string; role?: string } | null>(null);
+  const [currentUser, setCurrentUser] = useState<{ id: string; full_name: string; role?: string; subscription_tier?: string } | null>(null);
 
   // Conversations
   const [conversations, setConversations] = useState<Conversation[]>([]);
