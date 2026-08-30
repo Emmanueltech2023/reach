@@ -25,6 +25,7 @@ const INVESTOR_NAV: NavItem[] = [
   { id: "chats", icon: MessageCircle, label: "Messages", href: "/dashboard/chats" },
   { id: "notifications", icon: Bell, label: "Notifications", href: "/dashboard/notifications" },
   { id: "deals", icon: Handshake, label: "Deals", href: "/dashboard/deals" },
+  { id: "talent-search", icon: Users, label: "Talent Search", href: "/dashboard/talent-search" },
   { id: "meetings", icon: Calendar, label: "Meetings", href: "/dashboard/meetings" },
   { id: "bookmarks", icon: Bookmark, label: "Saved", href: "/dashboard/bookmarks" },
   { id: "jobs", icon: Briefcase, label: "Manage Jobs", href: "/dashboard/jobs/manage" },
@@ -41,6 +42,7 @@ const BUILDER_NAV: NavItem[] = [
   { id: "notifications", icon: Bell, label: "Notifications", href: "/dashboard/notifications" },
   { id: "meetings", icon: Calendar, label: "Meetings", href: "/dashboard/meetings" },
   { id: "deals", icon: Handshake, label: "Deals", href: "/dashboard/deals" },
+  { id: "talent-search", icon: Users, label: "Talent Search", href: "/dashboard/talent-search" },
   { id: "jobs", icon: Briefcase, label: "Manage Jobs", href: "/dashboard/jobs/manage" },
   { id: "community", icon: Users, label: "Community", href: "/dashboard/community" },
   { id: "team", icon: Users, label: "Team", href: "/dashboard/team" },
@@ -103,6 +105,9 @@ export default function DashboardShell({
 
   const [notifCount, setNotifCount] = useState<number | null>(
     unreadNotificationCount !== undefined ? unreadNotificationCount : null
+  );
+  const [msgCount, setMsgCount] = useState<number | null>(
+    unreadMessageCount !== undefined ? unreadMessageCount : null
   );
 
   const [userData, setUserData] = useState<{
@@ -181,20 +186,22 @@ export default function DashboardShell({
   };
 
   const displayNotifCount = unreadNotificationCount !== undefined ? unreadNotificationCount : (notifCount ?? 0);
+  const displayMsgCount = unreadMessageCount !== undefined ? unreadMessageCount : (msgCount ?? 0);
 
   useEffect(() => {
     let channel: any;
 
     const fetchUserDataAndNotifications = async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
+        const { data: sessionRes } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+        const user = sessionRes?.session?.user;
         if (!user) return;
 
         const { data: profile } = await supabase
           .from("profiles")
           .select("full_name, username, avatar_url, role, subscription_tier, is_verified")
           .eq("id", user.id)
-          .single();
+          .maybeSingle();
 
         if (profile) {
           setUserData({
@@ -226,23 +233,67 @@ export default function DashboardShell({
             }
           } catch {}
 
-          const { count, error } = await supabase
-            .from("notifications")
-            .select("id", { count: "exact", head: true })
-            .eq("user_id", user.id)
-            .eq("is_read", false);
+          try {
+            const { count, error } = await supabase
+              .from("notifications")
+              .select("id", { count: "exact", head: true })
+              .eq("user_id", user.id)
+              .neq("type", "message")
+              .eq("is_read", false);
 
-          if (!error && count !== null) {
-            setNotifCount(count);
-          }
+            if (!error && count !== null) {
+              setNotifCount(count);
+            }
+          } catch {}
+        };
+
+        const fetchMsgCount = async () => {
+          try {
+            const res = await fetch(`/api/messages/unread-count?userId=${user.id}`);
+            if (res.ok) {
+              const data = await res.json();
+              if (typeof data.count === "number") {
+                setMsgCount(data.count);
+                return;
+              }
+            }
+          } catch {}
+
+          try {
+            const { data: userConvos } = await supabase
+              .from("conversation_participants")
+              .select("conversation_id")
+              .eq("user_id", user.id);
+
+            if (userConvos && userConvos.length > 0) {
+              const convoIds = userConvos.map((c: any) => c.conversation_id);
+              const { data: unreadRows } = await supabase
+                .from("messages")
+                .select("id, delivery_status, is_read")
+                .in("conversation_id", convoIds)
+                .neq("sender_id", user.id);
+
+              const unreadTotal = (unreadRows || []).filter(
+                (m: any) => m.delivery_status !== "read" && m.is_read !== true
+              ).length;
+
+              setMsgCount(unreadTotal);
+            } else {
+              setMsgCount(0);
+            }
+          } catch {}
         };
 
         if (unreadNotificationCount === undefined) {
           await fetchCount();
         }
 
-        // Realtime subscription for live notifications with unique channel ID
-        const channelName = `notifications-${user.id}-${Date.now()}`;
+        if (unreadMessageCount === undefined) {
+          await fetchMsgCount();
+        }
+
+        // Realtime subscription for live notifications & messages with unique channel ID
+        const channelName = `dashboard-counts-${user.id}-${Date.now()}`;
         channel = supabase
           .channel(channelName)
           .on(
@@ -255,12 +306,41 @@ export default function DashboardShell({
             },
             () => {
               fetchCount();
+              fetchMsgCount();
+            }
+          )
+          .on(
+            "postgres_changes",
+            {
+              event: "*",
+              schema: "public",
+              table: "messages",
+            },
+            () => {
+              fetchMsgCount();
             }
           )
           .subscribe();
 
+        // Listen for instant in-app events
+        const handleRefresh = () => {
+          fetchMsgCount();
+          fetchCount();
+        };
+
+        window.addEventListener("messages-read", handleRefresh);
+        window.addEventListener("unread-count-updated", handleRefresh);
+
+        // Proactive 5-second polling for live counts across active sessions
+        const pollInterval = setInterval(() => {
+          fetchMsgCount();
+          fetchCount();
+        }, 5000);
+
+        (window as any)._msgPollInterval = pollInterval;
+
       } catch (err) {
-        console.error("Dashboard shell bootstrap profile/count resolution failed:", err);
+        console.error("Dashboard shell bootstrap profile/count resolution notice:", err);
       }
     };
 
@@ -270,20 +350,26 @@ export default function DashboardShell({
       if (channel) {
         supabase.removeChannel(channel);
       }
+      if ((window as any)._msgPollInterval) {
+        clearInterval((window as any)._msgPollInterval);
+      }
     };
-  }, [supabase, unreadNotificationCount]);
+  }, [supabase, unreadNotificationCount, unreadMessageCount]);
 
   return (
     <div className="min-h-screen bg-[#0F0F1A] flex w-full max-w-full overflow-x-clip">
 
       {/* Desktop Sidebar */}
       <aside suppressHydrationWarning className="hidden md:flex flex-col w-56 border-r border-[#3A3A52] shrink-0 fixed top-0 left-0 h-full z-30 bg-[#0F0F1A]">
-        <div className="px-5 py-5 border-b border-[#3A3A52]">
-          <div className="text-xl font-bold tracking-wider text-[#F5F3ED]">
-            R<span className="text-[#C9A84C]">EACH</span>
-          </div>
-          <div suppressHydrationWarning className="text-xs text-[#5C5A70] mt-0.5 capitalize">
-            {currentRole} dashboard
+        <div className="px-5 py-4 border-b border-[#3A3A52] flex items-center gap-3">
+          <img src="/logo-icon.png" alt="REACH" className="w-8 h-8 rounded-lg shrink-0" />
+          <div className="min-w-0">
+            <div className="text-lg font-bold tracking-wider text-[#F5F3ED] leading-tight">
+              R<span className="text-[#C9A84C]">EACH</span>
+            </div>
+            <div suppressHydrationWarning className="text-[11px] text-[#5C5A70] capitalize truncate">
+              {currentRole} dashboard
+            </div>
           </div>
         </div>
 
@@ -304,9 +390,9 @@ export default function DashboardShell({
                 <Icon size={17} className="shrink-0" />
                 <span>{item.label}</span>
                 
-                {item.id === "chats" && unreadMessageCount > 0 && (
-                  <span className="ml-auto w-5 h-5 bg-[#C9A84C] rounded-full text-[#1A1A2E] text-xs flex items-center justify-center font-medium animate-pulse">
-                    {unreadMessageCount}
+                {item.id === "chats" && displayMsgCount > 0 && (
+                  <span className="ml-auto min-w-[20px] h-5 px-1.5 bg-[#C9A84C] rounded-full text-[#1A1A2E] text-xs flex items-center justify-center font-bold animate-pulse">
+                    {displayMsgCount}
                   </span>
                 )}
 
@@ -379,25 +465,44 @@ export default function DashboardShell({
       {/* Mobile Top Bar */}
       {/* 💡 FIXED: Adjusted left/right margins and spacing so items map perfectly to screen padding bounds */}
       <div className="md:hidden fixed top-0 left-0 right-0 z-30 bg-[#0F0F1A] border-b border-[#3A3A52] px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
           <button onClick={() => setMobileMenuOpen(true)} className="p-1 -ml-1">
             <Menu size={20} className="text-[#A8A6B8]" />
           </button>
+          <img src="/logo-icon.png" alt="REACH" className="w-7 h-7 rounded shrink-0" />
           <div className="text-base font-bold tracking-wider text-[#F5F3ED]">
             R<span className="text-[#C9A84C]">EACH</span>
           </div>
         </div>
         
-        <div className="flex items-center gap-3">
-          <button onClick={() => router.push("/dashboard/notifications")} className="relative p-1">
-            <Bell size={20} className="text-[#A8A6B8]" />
-            {displayNotifCount > 0 && (
-              <span className="absolute top-0 right-0 w-4 h-4 bg-[#C9A84C] rounded-full text-[#1A1A2E] text-[10px] flex items-center justify-center font-bold">
-                {displayNotifCount}
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={() => router.push("/dashboard/chats")} 
+            className="relative p-1.5 rounded-lg text-[#A8A6B8] hover:text-[#F5F3ED] transition"
+            title="Messages"
+          >
+            <MessageCircle size={20} />
+            {displayMsgCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[17px] h-[17px] px-1 bg-[#C9A84C] text-[#1A1A2E] text-[10px] rounded-full flex items-center justify-center font-bold animate-pulse shadow-md shadow-black/60">
+                {displayMsgCount > 99 ? "99+" : displayMsgCount}
               </span>
             )}
           </button>
-          <div className="relative w-8 h-8 rounded-full bg-[#C9A84C20] text-[#C9A84C] text-xs font-medium flex items-center justify-center overflow-hidden shrink-0">
+
+          <button 
+            onClick={() => router.push("/dashboard/notifications")} 
+            className="relative p-1.5 rounded-lg text-[#A8A6B8] hover:text-[#F5F3ED] transition"
+            title="Notifications"
+          >
+            <Bell size={20} />
+            {displayNotifCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[17px] h-[17px] px-1 bg-[#C9A84C] text-[#1A1A2E] text-[10px] rounded-full flex items-center justify-center font-bold shadow-md shadow-black/60">
+                {displayNotifCount > 99 ? "99+" : displayNotifCount}
+              </span>
+            )}
+          </button>
+
+          <div className="relative w-8 h-8 rounded-full bg-[#C9A84C20] text-[#C9A84C] text-xs font-medium flex items-center justify-center overflow-hidden shrink-0 ml-1">
             {userData.avatarUrl ? (
               <Image
                 src={userData.avatarUrl}
@@ -419,8 +524,11 @@ export default function DashboardShell({
           <div className="flex-1 bg-black/50" onClick={() => setMobileMenuOpen(false)} />
           <div className="w-64 bg-[#0F0F1A] border-l border-[#3A3A52] flex flex-col">
             <div className="flex items-center justify-between px-4 py-4 border-b border-[#3A3A52]">
-              <div className="text-lg font-bold tracking-wider text-[#F5F3ED]">
-                R<span className="text-[#C9A84C]">EACH</span>
+              <div className="flex items-center gap-2">
+                <img src="/logo-icon.png" alt="REACH" className="w-7 h-7 rounded shrink-0" />
+                <div className="text-lg font-bold tracking-wider text-[#F5F3ED]">
+                  R<span className="text-[#C9A84C]">EACH</span>
+                </div>
               </div>
               <button onClick={() => setMobileMenuOpen(false)}>
                 <X size={20} className="text-[#A8A6B8]" />
@@ -443,15 +551,15 @@ export default function DashboardShell({
                     <Icon size={17} />
                     <span>{item.label}</span>
 
-                    {item.id === "chats" && unreadMessageCount > 0 && (
-                      <span className="ml-auto w-5 h-5 bg-[#C9A84C] rounded-full text-[#1A1A2E] text-xs flex items-center justify-center font-medium">
-                        {unreadMessageCount}
+                    {item.id === "chats" && displayMsgCount > 0 && (
+                      <span className="ml-auto min-w-[20px] h-5 px-1.5 bg-[#C9A84C] rounded-full text-[#1A1A2E] text-xs flex items-center justify-center font-bold animate-pulse">
+                        {displayMsgCount > 99 ? "99+" : displayMsgCount}
                       </span>
                     )}
 
                     {item.id === "notifications" && displayNotifCount > 0 && (
                       <span className="ml-auto min-w-[20px] h-5 px-1.5 bg-[#C9A84C] rounded-full text-[#1A1A2E] text-xs flex items-center justify-center font-bold">
-                        {displayNotifCount}
+                        {displayNotifCount > 99 ? "99+" : displayNotifCount}
                       </span>
                     )}
                   </button>
@@ -480,13 +588,27 @@ export default function DashboardShell({
           <div className="flex-1" />
           <div className="flex items-center gap-3">
             <button
+              onClick={() => router.push("/dashboard/chats")}
+              className="relative w-9 h-9 flex items-center justify-center border border-[#3A3A52] rounded-lg hover:bg-[#1A1A2E] transition"
+              title="Messages"
+            >
+              <MessageCircle size={17} className="text-[#A8A6B8]" />
+              {displayMsgCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-[#C9A84C] rounded-full text-[#1A1A2E] text-[10px] flex items-center justify-center font-bold animate-pulse">
+                  {displayMsgCount > 99 ? "99+" : displayMsgCount}
+                </span>
+              )}
+            </button>
+
+            <button
               onClick={() => router.push("/dashboard/notifications")}
               className="relative w-9 h-9 flex items-center justify-center border border-[#3A3A52] rounded-lg hover:bg-[#1A1A2E] transition"
+              title="Notifications"
             >
               <Bell size={17} className="text-[#A8A6B8]" />
               {displayNotifCount > 0 && (
                 <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-[#C9A84C] rounded-full text-[#1A1A2E] text-[10px] flex items-center justify-center font-bold">
-                  {displayNotifCount}
+                  {displayNotifCount > 99 ? "99+" : displayNotifCount}
                 </span>
               )}
             </button>
@@ -508,22 +630,24 @@ export default function DashboardShell({
             <button
               key={item.id}
               onClick={() => router.push(item.href)}
-              className="flex-1 flex flex-col items-center justify-center gap-0.5 py-1 relative"
+              className="flex-1 flex flex-col items-center justify-center gap-0.5 py-1"
             >
-              <Icon size={18} className={active ? "text-[#C9A84C]" : "text-[#5C5A70]"} />
+              <div className="relative flex items-center justify-center">
+                <Icon size={19} className={active ? "text-[#C9A84C]" : "text-[#5C5A70]"} />
+                {item.id === "chats" && displayMsgCount > 0 && (
+                  <span className="absolute -top-1.5 -right-2.5 min-w-[17px] h-[17px] px-1 bg-[#C9A84C] text-[#1A1A2E] text-[10px] rounded-full flex items-center justify-center font-bold animate-pulse shadow-md shadow-black/60">
+                    {displayMsgCount > 99 ? "99+" : displayMsgCount}
+                  </span>
+                )}
+                {item.id === "notifications" && displayNotifCount > 0 && (
+                  <span className="absolute -top-1.5 -right-2.5 min-w-[17px] h-[17px] px-1 bg-[#C9A84C] text-[#1A1A2E] text-[10px] rounded-full flex items-center justify-center font-bold shadow-md shadow-black/60">
+                    {displayNotifCount > 99 ? "99+" : displayNotifCount}
+                  </span>
+                )}
+              </div>
               <span className={`text-[10px] truncate max-w-[60px] ${active ? "text-[#C9A84C] font-medium" : "text-[#5C5A70]"}`}>
                 {item.label}
               </span>
-              {item.id === "chats" && unreadMessageCount > 0 && (
-                <span className="absolute top-2 right-1/4 w-4 h-4 bg-[#C9A84C] rounded-full text-[#1A1A2E] text-[10px] flex items-center justify-center font-bold">
-                  {unreadMessageCount}
-                </span>
-              )}
-              {item.id === "notifications" && displayNotifCount > 0 && (
-                <span className="absolute top-2 right-1/4 w-4 h-4 bg-[#C9A84C] rounded-full text-[#1A1A2E] text-[10px] flex items-center justify-center font-bold">
-                  {displayNotifCount}
-                </span>
-              )}
             </button>
           );
         })}

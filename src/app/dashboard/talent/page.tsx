@@ -505,7 +505,11 @@ export default function TalentDashboardPage() {
                         
                         <div className="flex items-center gap-2 text-xs text-[#A8A6B8]">
                           <span className="font-semibold text-[#F5F3ED]">{job.company_name}</span>
-                          {job.profiles?.is_verified && (
+                          {job.profiles?.is_scam ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-red-500/20 text-red-400 border border-red-500/60 shadow-[0_0_10px_rgba(239,68,68,0.3)] animate-pulse">
+                              ⚠️ SCAM ALERT
+                            </span>
+                          ) : job.profiles?.is_verified && (
                             <span className="flex items-center gap-0.5 text-[11px] text-[#C9A84C]">
                               <ShieldCheck className="h-3.5 w-3.5" /> Verified
                             </span>

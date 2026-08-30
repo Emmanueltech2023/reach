@@ -5,13 +5,13 @@ import { useState, useEffect } from "react";
 import {
   Shield, Globe, TrendingUp, Users,
   CheckCircle, ArrowRight, ArrowUpRight, ChevronDown,
-  Zap, Lock, BarChart2, Quote,
+  Zap, Lock, BarChart2, Quote, Briefcase, Sparkles, Star
 } from "lucide-react";
 
 const STATS = [
   { value: "2,400+", label: "Verified investors" },
   { value: "$48M+", label: "Deals facilitated" },
-  { value: "67", label: "Countries" },
+  { value: "1,800+", label: "Web2 & Web3 Jobs" },
   { value: "94%", label: "Match accuracy" },
 ];
 
@@ -53,25 +53,26 @@ const REACH_PILLARS = [
   },
 ];
 
-// Real photography, sourced via Lorem Picsum (free-to-use stock photos).
+// High-definition, reliable Unsplash stock photography & UI illustrations
 const IMG = {
-  hero: "https://picsum.photos/seed/ivest-hero-2026/1800/1100",
+  hero: "https://images.unsplash.com/photo-1551836022-d5d88e9218df?q=80&w=1600&auto=format&fit=crop",
   features: [
-    "/images/feat-verify.png",
-    "/images/feat-ai.png",
-    "/images/feat-globe.png",
-    "/images/feat-lock.png",
-    "/images/feat-chart.png",
-    "/images/feat-forum.png",
+    "https://images.unsplash.com/photo-1563986768609-322da13575f3?q=80&w=800&auto=format&fit=crop",
+    "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=800&auto=format&fit=crop",
+    "https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?q=80&w=800&auto=format&fit=crop",
+    "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?q=80&w=800&auto=format&fit=crop",
+    "https://images.unsplash.com/photo-1460925895917-afdab827c52f?q=80&w=800&auto=format&fit=crop",
+    "https://images.unsplash.com/photo-1522071820081-009f0129c71c?q=80&w=800&auto=format&fit=crop",
   ],
-  flow: "/images/vest.jpeg",
-  investors: "/images/inves.png",
-  builders: "/images/build.png",
-  cta: "/images/hero_image.jpg",
+  flow: "https://images.unsplash.com/photo-1531482615713-2afd69097998?q=80&w=1000&auto=format&fit=crop",
+  investors: "https://images.unsplash.com/photo-1556761175-5973dc0f32e7?q=80&w=1000&auto=format&fit=crop",
+  builders: "https://images.unsplash.com/photo-1522071820081-009f0129c71c?q=80&w=1000&auto=format&fit=crop",
+  talent: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=1000&auto=format&fit=crop",
+  cta: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=1600&auto=format&fit=crop",
   avatars: [
-    "https://picsum.photos/seed/ivest-avatar-marcus/200/200",
-    "https://picsum.photos/seed/ivest-avatar-amara/200/200",
-    "https://picsum.photos/seed/ivest-avatar-david/200/200",
+    "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=300&auto=format&fit=crop",
+    "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=300&auto=format&fit=crop",
+    "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=300&auto=format&fit=crop",
   ],
 };
 
@@ -79,7 +80,7 @@ const FEATURES = [
   {
     icon: Shield,
     title: "KYC-verified ecosystem",
-    desc: "Every investor and builder is identity-verified before accessing the platform. No anonymous bad actors.",
+    desc: "Every investor, builder, and job poster is identity-verified before accessing the platform. Zero bad actors.",
     span: "row-span-2",
     img: IMG.features[0],
   },
@@ -93,28 +94,28 @@ const FEATURES = [
   {
     icon: Globe,
     title: "Truly borderless",
-    desc: "Built for emerging markets. West Africa, Southeast Asia, MENA. Capital flows where opportunity is.",
+    desc: "Built for emerging markets. West Africa, Southeast Asia, MENA. Capital and tech talent flow globally.",
     span: "",
     img: IMG.features[2],
   },
   {
     icon: BarChart2,
     title: "Real-time analytics",
-    desc: "Builders see who viewed their pitch, where they're from, and what resonated.",
+    desc: "Builders see who viewed their pitch, where they're from, and candidate application flow.",
     span: "",
     img: IMG.features[4],
   },
   {
     icon: Lock,
-    title: "Deal pipeline security",
-    desc: "NDA → Term Sheet → Agreement → Close. Every stage tracked, every document protected.",
+    title: "Deal & application pipeline",
+    desc: "NDA → Term Sheet → Agreement → Hire. Every stage tracked, every document protected.",
     span: "",
     img: IMG.features[3],
   },
   {
     icon: Users,
-    title: "Community forum",
-    desc: "A moderated global forum where investors and builders discuss deals, trends, and opportunities.",
+    title: "Community forum & careers",
+    desc: "A moderated global hub where investors, founders, and engineers connect and collaborate.",
     span: "row-span-2",
     img: IMG.features[5],
   },
@@ -123,27 +124,27 @@ const FEATURES = [
 const HOW_IT_WORKS = [
   {
     step: "01",
-    role: "Investor",
+    role: "All Roles",
     title: "Create your verified profile",
-    desc: "Complete KYC, set your investment focus areas, ticket size, and sectors.",
+    desc: "Complete identity verification and set your thesis as an Investor, Builder, or Job Seeker.",
   },
   {
     step: "02",
-    role: "Investor",
-    title: "Get AI-scored matches",
-    desc: "Our engine surfaces startups that match your exact investment thesis, scoreing from 0–99.",
+    role: "Investor & Talent",
+    title: "AI matches & 24h early job access",
+    desc: "Investors receive AI-scored startup deals (0–99). Pro Talent get 24h early access to new tech listings.",
   },
   {
     step: "03",
-    role: "Both",
-    title: "Chat, meet, and sign NDAs",
-    desc: "Real-time messaging, video calls, and NDA requests, all inside one platform.",
+    role: "All Roles",
+    title: "Chat, meet, apply & sign NDAs",
+    desc: "Real-time messaging, calendar meetings, job applications, and NDA agreements in one platform.",
   },
   {
     step: "04",
-    role: "Both",
-    title: "Close deals and track commissions",
-    desc: "Move through the full pipeline with a complete audit trail and automatic invoicing.",
+    role: "All Roles",
+    title: "Close deals & land global careers",
+    desc: "Move through complete deal pipelines or get hired at top Web2 & Web3 startups.",
   },
 ];
 
@@ -161,10 +162,29 @@ const TESTIMONIALS = [
     avatar: IMG.avatars[1],
   },
   {
-    quote: "The deal pipeline and resources keep everything organized. I can track 12 active deals across horizons effortlessly.",
+    quote: "I found a Lead Web3 Developer role at a Series A Web3 protocol within 2 weeks of upgrading to Pro Talent on REACH.",
     name: "David L.",
-    title: "Venture partner, Singapore",
+    title: "Senior Smart Contract Engineer",
     avatar: IMG.avatars[2],
+  },
+];
+
+const HERO_IMAGES = [
+  {
+    url: "https://images.unsplash.com/photo-1551836022-d5d88e9218df?q=80&w=1600&auto=format&fit=crop",
+    caption: "Capital Allocators & Deal Pipelines",
+  },
+  {
+    url: "https://images.unsplash.com/photo-1522071820081-009f0129c71c?q=80&w=1600&auto=format&fit=crop",
+    caption: "High-Growth Tech Startup Builders",
+  },
+  {
+    url: "https://images.unsplash.com/photo-1531482615713-2afd69097998?q=80&w=1600&auto=format&fit=crop",
+    caption: "Web2 & Web3 Global Tech Talent",
+  },
+  {
+    url: "https://images.unsplash.com/photo-1556761175-5973dc0f32e7?q=80&w=1600&auto=format&fit=crop",
+    caption: "Cross-Border Horizons & Scale",
   },
 ];
 
@@ -172,6 +192,7 @@ export default function LandingPage() {
   const router = useRouter();
   const [scrolled, setScrolled] = useState(false);
   const [activeTestimonial, setActiveTestimonial] = useState(0);
+  const [currentHeroIdx, setCurrentHeroIdx] = useState(0);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
@@ -184,6 +205,14 @@ export default function LandingPage() {
       setActiveTestimonial((prev) => (prev + 1) % TESTIMONIALS.length);
     }, 5000);
     return () => clearInterval(interval);
+  }, []);
+
+  // Auto-slide Hero Background Images every 4.5s
+  useEffect(() => {
+    const heroTimer = setInterval(() => {
+      setCurrentHeroIdx((prev) => (prev + 1) % HERO_IMAGES.length);
+    }, 4500);
+    return () => clearInterval(heroTimer);
   }, []);
 
   return (
@@ -207,7 +236,7 @@ export default function LandingPage() {
           </div>
 
           <div className="hidden md:flex items-center gap-8">
-            {["Pillars", "Features", "How it works", "For investors", "For builders"].map((item) => (
+            {["Features", "How it works", "For investors", "For builders", "For talent"].map((item) => (
               <a
                 key={item}
                 href={`#${item.toLowerCase().replace(/ /g, "-")}`}
@@ -221,13 +250,13 @@ export default function LandingPage() {
           <div className="flex items-center gap-3">
             <button
               onClick={() => router.push("/auth/login")}
-              className="hidden sm:block text-sm text-[#A8A6B8] hover:text-[#F5F3ED] transition px-3 py-1.5"
+              className="hidden sm:block text-sm text-[#A8A6B8] hover:text-[#F5F3ED] transition px-3 py-1.5 cursor-pointer"
             >
               Log in
             </button>
             <button
               onClick={() => router.push("/onboarding")}
-              className="bg-[#C9A84C] text-[#1A1A2E] text-sm font-medium px-4 py-2 rounded-lg hover:opacity-90 transition shadow-lg shadow-[#C9A84C]/20"
+              className="bg-[#C9A84C] text-[#1A1A2E] text-sm font-medium px-4 py-2 rounded-lg hover:opacity-90 transition shadow-lg shadow-[#C9A84C]/20 cursor-pointer"
             >
               Get started
             </button>
@@ -235,13 +264,25 @@ export default function LandingPage() {
         </div>
       </nav>
 
-      {/* Hero — full-bleed photo with duotone overlay */}
-      <section className="relative min-h-screen flex flex-col items-center justify-end px-6 pb-20 text-center overflow-hidden">
-        <img
-          src={IMG.hero}
-          alt=""
-          className="absolute inset-0 w-full h-full object-cover"
-        />
+      {/* Hero — Animated 4-Image Fading Carousel Background */}
+      <section className="relative min-h-screen flex flex-col items-center justify-end px-4 sm:px-6 pb-16 sm:pb-20 text-center overflow-hidden">
+        
+        {/* Animated Background Slide Stack */}
+        <div className="absolute inset-0 overflow-hidden">
+          {HERO_IMAGES.map((img, i) => (
+            <img
+              key={img.url}
+              src={img.url}
+              alt={img.caption}
+              className={`absolute inset-0 w-full h-full object-cover transition-all duration-1000 ease-in-out transform ${
+                i === currentHeroIdx
+                  ? "opacity-100 scale-105"
+                  : "opacity-0 scale-100 pointer-events-none"
+              }`}
+            />
+          ))}
+        </div>
+
         <div
           className="absolute inset-0"
           style={{
@@ -259,26 +300,20 @@ export default function LandingPage() {
         />
 
         <div className="relative z-10 flex flex-col items-center max-w-3xl">
-          <div className="flex items-center gap-2 bg-[#0F0F1A]/80 backdrop-blur border border-[#C9A84C30] rounded-full px-4 py-1.5 mb-8">
-            <div className="w-1.5 h-1.5 rounded-full bg-[#C9A84C] animate-pulse" />
-            <span className="text-[#C9A84C] text-xs font-semibold uppercase tracking-wider">
-              R · E · A · C · H &nbsp;|&nbsp; Resources · Entrepreneurs · Access · Capital · Horizons
-            </span>
-          </div>
 
-          <h1 className="text-4xl sm:text-5xl md:text-6xl font-medium tracking-tight mb-6 leading-tight">
+          <h1 className="text-3xl sm:text-5xl md:text-6xl font-display font-bold tracking-tight mb-4 sm:mb-6 leading-tight">
             Empowering Entrepreneurs.{" "}
-            <span className="text-[#C9A84C]">Expanding Horizons.</span>
+            <span className="text-[#C9A84C] block sm:inline">Expanding Horizons.</span>
           </h1>
 
-          <p className="text-[#D8D6E8] text-base sm:text-lg max-w-xl mb-10 leading-relaxed">
-            A global, verified investment ecosystem connecting Resources, Entrepreneurs, Access, Capital, and Horizons across borders.
+          <p className="text-[#D8D6E8] text-sm sm:text-base md:text-lg max-w-xl mb-8 sm:mb-10 leading-relaxed">
+            A global, verified ecosystem connecting Resources, Entrepreneurs, Access, Capital, Horizons, and Talent across borders.
           </p>
 
-          <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
             <button
               onClick={() => router.push("/onboarding")}
-              className="flex items-center justify-center gap-2 bg-[#C9A84C] text-[#1A1A2E] font-medium text-sm px-8 py-3.5 rounded-xl hover:opacity-90 transition"
+              className="flex items-center justify-center gap-2 bg-[#C9A84C] text-[#1A1A2E] font-medium text-sm px-8 py-3.5 rounded-xl hover:opacity-90 transition cursor-pointer"
               style={{ boxShadow: "0 8px 32px rgba(201, 168, 76, 0.3)" }}
             >
               Start investing
@@ -286,10 +321,25 @@ export default function LandingPage() {
             </button>
             <button
               onClick={() => router.push("/auth/login")}
-              className="flex items-center justify-center gap-2 border border-[#F5F3ED40] text-[#F5F3ED] font-medium text-sm px-8 py-3.5 rounded-xl hover:bg-[#F5F3ED10] backdrop-blur transition"
+              className="flex items-center justify-center gap-2 border border-[#F5F3ED40] text-[#F5F3ED] font-medium text-sm px-8 py-3.5 rounded-xl hover:bg-[#F5F3ED10] backdrop-blur transition cursor-pointer"
             >
               Log in to dashboard
             </button>
+          </div>
+
+          {/* Responsive Slide Indicator Controls */}
+          <div className="flex items-center gap-2.5 mt-8 sm:mt-10">
+            {HERO_IMAGES.map((img, i) => (
+              <button
+                key={i}
+                onClick={() => setCurrentHeroIdx(i)}
+                className={`h-1.5 sm:h-2 rounded-full transition-all duration-500 cursor-pointer ${
+                  i === currentHeroIdx ? "w-8 sm:w-10 bg-[#C9A84C]" : "w-2 bg-white/30 hover:bg-white/60"
+                }`}
+                title={img.caption}
+                aria-label={`Slide ${i + 1}`}
+              />
+            ))}
           </div>
         </div>
 
@@ -311,38 +361,45 @@ export default function LandingPage() {
       </section>
 
       {/* REACH Pillars Section — Explaining R · E · A · C · H */}
-      <section id="pillars" className="max-w-6xl mx-auto px-6 py-24">
-        <div className="text-center mb-14">
-          <div className="inline-flex items-center gap-2 bg-[#C9A84C]/10 border border-[#C9A84C]/30 text-[#C9A84C] text-xs font-bold uppercase tracking-widest px-3.5 py-1 rounded-full mb-3">
-            The REACH Framework
+      <section className="max-w-6xl mx-auto px-4 sm:px-6 py-16 sm:py-24">
+        <div className="text-center mb-12 sm:mb-16">
+          <div className="inline-flex items-center gap-2 bg-[#C9A84C]/10 border border-[#C9A84C]/30 text-[#C9A84C] text-[11px] sm:text-xs font-bold uppercase tracking-widest px-4 py-1.5 rounded-full mb-4">
+            The R · E · A · C · H Architecture
           </div>
-          <h2 className="text-3xl sm:text-4xl font-medium mb-4">
-            What powers <span className="text-[#C9A84C]">R · E · A · C · H</span>
+          <h2 className="text-3xl sm:text-4xl md:text-5xl font-display font-bold mb-4">
+            Built on Five Core <span className="text-[#C9A84C]">Pillars</span>
           </h2>
-          <p className="text-[#A8A6B8] text-sm max-w-xl mx-auto leading-relaxed">
-            Our five-pillar architecture bridges high-potential innovators with the institutional infrastructure, capital, and market horizons needed to scale globally.
+          <p className="text-[#A8A6B8] text-sm sm:text-base max-w-2xl mx-auto leading-relaxed">
+            Our five-pillar ecosystem connects visionary entrepreneurs with institutional resources, direct access, capital allocators, and global horizons.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        {/* Responsive 5-card layout: 1 col on mobile, 2 col on tablet, 5 col on desktop */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 sm:gap-5">
           {REACH_PILLARS.map((pillar) => {
             const Icon = pillar.icon;
             return (
               <div
                 key={pillar.letter}
-                className="group relative bg-[#1A1A2E]/80 backdrop-blur border border-[#3A3A52] hover:border-[#C9A84C] p-6 rounded-2xl flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-[#C9A84C]/5"
+                className="group relative bg-gradient-to-b from-[#1A1A2E] to-[#121223] border border-[#3A3A52] hover:border-[#C9A84C]/60 p-6 rounded-2xl flex flex-col justify-between transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-[#C9A84C]/10"
               >
+                {/* Subtle top gold accent bar */}
+                <div className="absolute top-0 left-6 right-6 h-0.5 bg-gradient-to-r from-transparent via-[#C9A84C]/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+
                 <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <span className="text-3xl font-black text-[#C9A84C] group-hover:scale-110 transition-transform">
+                  <div className="flex items-center justify-between mb-5">
+                    <span className="w-12 h-12 rounded-xl bg-[#0F0F1A] border border-[#C9A84C]/30 flex items-center justify-center text-2xl font-black text-[#C9A84C] group-hover:scale-110 group-hover:border-[#C9A84C] shadow-lg shadow-black/40 transition-all">
                       {pillar.letter}
                     </span>
-                    <div className="w-8 h-8 rounded-lg bg-[#0F0F1A] border border-[#3A3A52] flex items-center justify-center text-[#C9A84C]">
-                      <Icon size={16} />
+                    <div className="w-9 h-9 rounded-lg bg-[#C9A84C]/10 border border-[#C9A84C]/20 flex items-center justify-center text-[#C9A84C] group-hover:bg-[#C9A84C] group-hover:text-[#1A1A2E] transition-all duration-300">
+                      <Icon size={18} />
                     </div>
                   </div>
-                  <h3 className="text-[#F5F3ED] text-base font-bold mb-1">{pillar.name}</h3>
-                  <div className="text-[#C9A84C] text-[11px] font-medium uppercase tracking-wider mb-2.5">
+                  
+                  <h3 className="text-[#F5F3ED] text-lg font-heading font-bold mb-1 group-hover:text-[#C9A84C] transition-colors">
+                    {pillar.name}
+                  </h3>
+                  <div className="text-[#C9A84C] text-[10px] font-bold uppercase tracking-wider mb-3">
                     {pillar.tagline}
                   </div>
                   <p className="text-[#A8A6B8] text-xs leading-relaxed">
@@ -449,12 +506,12 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* For investors / For builders — full-width photographic split bands */}
+      {/* For investors / For builders / For talent — full-width photographic split bands */}
       <section className="max-w-6xl mx-auto px-6 py-24 flex flex-col gap-6">
 
         <div id="for-investors" className="grid md:grid-cols-2 rounded-2xl overflow-hidden border border-[#3A3A52]">
           <div className="relative h-64 md:h-auto">
-            <img src={IMG.investors} alt="" className="absolute inset-0 w-full h-full object-cover" />
+            <img src={IMG.investors} alt="Investor ecosystem" className="absolute inset-0 w-full h-full object-cover" />
             <div className="absolute inset-0 bg-gradient-to-t md:bg-gradient-to-r from-[#1A1A2E] via-transparent to-transparent" />
           </div>
           <div className="bg-[#1A1A2E] p-8 md:p-10 flex flex-col justify-center">
@@ -464,7 +521,7 @@ export default function LandingPage() {
             <div className="text-blue-400 text-xs font-medium uppercase tracking-widest mb-3">
               For investors
             </div>
-            <h3 className="text-[#F5F3ED] text-xl font-medium mb-4">
+            <h3 className="text-[#F5F3ED] text-xl font-heading font-medium mb-4">
               Find deals that match your thesis
             </h3>
             <p className="text-[#A8A6B8] text-sm leading-relaxed mb-6">
@@ -485,7 +542,7 @@ export default function LandingPage() {
             </ul>
             <button
               onClick={() => router.push("/onboarding")}
-              className="self-start flex items-center gap-2 border border-blue-700 text-blue-400 text-sm px-5 py-2.5 rounded-lg hover:bg-blue-900/20 transition"
+              className="self-start flex items-center gap-2 border border-blue-700 text-blue-400 text-sm px-5 py-2.5 rounded-lg hover:bg-blue-900/20 transition cursor-pointer"
             >
               Join as investor <ArrowUpRight size={14} />
             </button>
@@ -500,17 +557,17 @@ export default function LandingPage() {
             <div className="text-[#C9A84C] text-xs font-medium uppercase tracking-widest mb-3">
               For entrepreneurs & builders
             </div>
-            <h3 className="text-[#F5F3ED] text-xl font-medium mb-4">
-              Raise from investors who actually care
+            <h3 className="text-[#F5F3ED] text-xl font-heading font-medium mb-4">
+              Raise capital & build your core team
             </h3>
             <p className="text-[#A8A6B8] text-sm leading-relaxed mb-6">
-              Upload your project, set your funding goal, and get discovered by verified global investors across boundless horizons.
+              Upload your project, set your funding goal, post job openings, and get discovered by global investors and top talent.
             </p>
             <ul className="flex flex-col gap-2 mb-8">
               {[
-                "Project listing with banner and logo",
+                "Project listing with banner and workspace",
                 "Real-time investor interest tracking",
-                "View analytics by country and region",
+                "Post Web2 & Web3 job vacancies",
                 "Funding progress bar and milestones",
               ].map((item) => (
                 <li key={item} className="flex items-center gap-2 text-xs text-[#A8A6B8]">
@@ -521,14 +578,54 @@ export default function LandingPage() {
             </ul>
             <button
               onClick={() => router.push("/onboarding")}
-              className="self-start flex items-center gap-2 bg-[#C9A84C] text-[#1A1A2E] text-sm font-medium px-5 py-2.5 rounded-lg hover:opacity-90 transition"
+              className="self-start flex items-center gap-2 bg-[#C9A84C] text-[#1A1A2E] text-sm font-medium px-5 py-2.5 rounded-lg hover:opacity-90 transition cursor-pointer"
             >
               List your startup <ArrowUpRight size={14} />
             </button>
           </div>
           <div className="relative h-64 md:h-auto md:order-2 order-1">
-            <img src={IMG.builders} alt="" className="absolute inset-0 w-full h-full object-cover" />
+            <img src={IMG.builders} alt="Builder ecosystem" className="absolute inset-0 w-full h-full object-cover" />
             <div className="absolute inset-0 bg-gradient-to-t md:bg-gradient-to-l from-[#1A1A2E] via-transparent to-transparent" />
+          </div>
+        </div>
+
+        <div id="for-talent" className="grid md:grid-cols-2 rounded-2xl overflow-hidden border border-[#3A3A52]">
+          <div className="relative h-64 md:h-auto">
+            <img src={IMG.talent} alt="Talent & Careers" className="absolute inset-0 w-full h-full object-cover" />
+            <div className="absolute inset-0 bg-gradient-to-t md:bg-gradient-to-r from-[#1A1A2E] via-transparent to-transparent" />
+          </div>
+          <div className="bg-[#1A1A2E] p-8 md:p-10 flex flex-col justify-center">
+            <div className="w-10 h-10 rounded-xl bg-emerald-900/30 flex items-center justify-center mb-5">
+              <Briefcase size={18} className="text-emerald-400" />
+            </div>
+            <div className="text-emerald-400 text-xs font-medium uppercase tracking-widest mb-3">
+              For talent & job seekers
+            </div>
+            <h3 className="text-[#F5F3ED] text-xl font-heading font-medium mb-4">
+              Land high-impact global tech roles
+            </h3>
+            <p className="text-[#A8A6B8] text-sm leading-relaxed mb-6">
+              Discover verified Web2 & Web3 career opportunities, apply directly to funded startups, and stand out with Pro talent verification.
+            </p>
+            <ul className="flex flex-col gap-2 mb-8">
+              {[
+                "24h early access to new job listings (Pro)",
+                "Direct messaging with hiring managers",
+                "Verified talent profile & skill tags",
+                "Application tracker & status notifications",
+              ].map((item) => (
+                <li key={item} className="flex items-center gap-2 text-xs text-[#A8A6B8]">
+                  <CheckCircle size={13} className="text-emerald-400 flex-shrink-0" />
+                  {item}
+                </li>
+              ))}
+            </ul>
+            <button
+              onClick={() => router.push("/auth/signup")}
+              className="self-start flex items-center gap-2 border border-emerald-700 text-emerald-400 text-sm px-5 py-2.5 rounded-lg hover:bg-emerald-900/20 transition cursor-pointer"
+            >
+              Explore job opportunities <ArrowUpRight size={14} />
+            </button>
           </div>
         </div>
       </section>

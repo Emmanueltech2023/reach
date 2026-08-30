@@ -84,13 +84,16 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
           }
         }
 
-        // 2. Check authenticated profile safely
+        // 2. Check authenticated profile safely using local session first
         let user: any = null;
+        let session: any = null;
         try {
-          const { data } = await supabase.auth.getUser();
-          user = data?.user || null;
+          const sessionRes = await supabase.auth.getSession().catch(() => ({ data: { session: null }, error: null }));
+          session = sessionRes?.data?.session || null;
+          user = session?.user || null;
         } catch {
           user = null;
+          session = null;
         }
 
         if (user) {
@@ -114,7 +117,6 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
                 activeCountry = activeCountry || detected.countryCode;
                 activeCurrency = activeCurrency || detected.currencyCode;
 
-                const { data: { session } } = await supabase.auth.getSession();
                 if (session?.access_token) {
                   fetch("/api/profile/update", {
                     method: "POST",
@@ -136,8 +138,10 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
               setCurrencyState(activeCurrency);
               setCountry(activeCountry);
               if (typeof window !== "undefined") {
-                localStorage.setItem("preferred_currency", activeCurrency);
-                localStorage.setItem("preferred_country", activeCountry);
+                try {
+                  localStorage.setItem("preferred_currency", activeCurrency);
+                  localStorage.setItem("preferred_country", activeCountry);
+                } catch {}
               }
               setLoading(false);
               return;
@@ -167,24 +171,33 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
   const setCurrency = async (code: string) => {
     const upperCode = code.toUpperCase();
     setCurrencyState(upperCode);
-    localStorage.setItem("preferred_currency", upperCode);
+    try {
+      if (typeof window !== "undefined") {
+        localStorage.setItem("preferred_currency", upperCode);
+      }
+    } catch {}
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
+      const sessionRes = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+      const session = sessionRes?.data?.session;
+      const user = session?.user;
+      if (user && session?.access_token) {
         await fetch("/api/profile/update", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
           body: JSON.stringify({
             userId: user.id,
             updates: {
               preferred_currency: upperCode,
             },
           }),
-        });
+        }).catch(() => {});
       }
     } catch (e) {
-      console.error("Failed to update currency on profile:", e);
+      // non-blocking
     }
   };
 

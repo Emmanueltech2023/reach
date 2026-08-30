@@ -21,6 +21,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useCurrency } from "@/components/CurrencyProvider";
 import TierBadge from "@/components/TierBadge";
 import VerifiedBadge from "@/components/VerifiedBadge";
+import MatchScoreBadge from "@/components/MatchScoreBadge";
 
 type Project = {
   id: string;
@@ -43,6 +44,8 @@ type Project = {
     is_verified: boolean;
     trust_score: number;
     subscription_tier?: string;
+    is_scam?: boolean;
+    is_banned?: boolean;
   };
 };
 
@@ -86,6 +89,22 @@ export default function InvestorDashboard() {
   const [activeFilter, setActiveFilter] = useState("All");
   const [search, setSearch] = useState("");
   const [bookmarks, setBookmarks] = useState<string[]>([]);
+  const [profile, setProfile] = useState<any>(null);
+
+  useEffect(() => {
+    async function loadProfile() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: userProf } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", user.id)
+          .maybeSingle();
+        setProfile(userProf);
+      }
+    }
+    void loadProfile();
+  }, [supabase]);
 
   const fetchProjects = useCallback(async () => {
     setLoading(true);
@@ -220,7 +239,7 @@ export default function InvestorDashboard() {
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-6">
                     {premium.map((p) => (
-                      <ProjectCard key={p.id} project={p} bookmarks={bookmarks}
+                      <ProjectCard key={p.id} project={p} profile={profile} bookmarks={bookmarks}
                         toggleBookmark={toggleBookmark} getColor={getColor}
                         formatCurrency={formatCurrency} getRaisedPercent={getRaisedPercent}
                         getInitials={getInitials} router={router} />
@@ -245,7 +264,7 @@ export default function InvestorDashboard() {
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-6">
                     {pro.map((p) => (
-                      <ProjectCard key={p.id} project={p} bookmarks={bookmarks}
+                      <ProjectCard key={p.id} project={p} profile={profile} bookmarks={bookmarks}
                         toggleBookmark={toggleBookmark} getColor={getColor}
                         formatCurrency={formatCurrency} getRaisedPercent={getRaisedPercent}
                         getInitials={getInitials} router={router} />
@@ -267,7 +286,7 @@ export default function InvestorDashboard() {
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-6">
                     {standard.map((p) => (
-                      <ProjectCard key={p.id} project={p} bookmarks={bookmarks}
+                      <ProjectCard key={p.id} project={p} profile={profile} bookmarks={bookmarks}
                         toggleBookmark={toggleBookmark} getColor={getColor}
                         formatCurrency={formatCurrency} getRaisedPercent={getRaisedPercent}
                         getInitials={getInitials} router={router} />
@@ -291,10 +310,11 @@ export default function InvestorDashboard() {
 }
 
 function ProjectCard({
-  project: p, bookmarks, toggleBookmark, getColor,
+  project: p, profile, bookmarks, toggleBookmark, getColor,
   formatCurrency, getRaisedPercent, getInitials, router,
 }: {
   project: Project;
+  profile?: any;
   bookmarks: string[];
   toggleBookmark: (id: string) => void;
   getColor: (id: string) => string;
@@ -305,10 +325,12 @@ function ProjectCard({
 }) {
   const isBookmarked = bookmarks.includes(p.id);
   const raisedPct = getRaisedPercent(p.funding_goal, p.amount_raised);
-  const projectCoverImage = p.image_url || p.banner_url;
-
-  return (
-    <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-xl overflow-hidden flex flex-col justify-between hover:border-[#5C5A70] transition-all duration-300 hover:-translate-y-0.5 group shadow-lg shadow-black/20">
+  const projectCoverImage = p.image_url || p.banner_url;  return (
+    <div className={`rounded-xl overflow-hidden flex flex-col justify-between transition-all duration-300 hover:-translate-y-0.5 group shadow-lg shadow-black/20 ${
+      p.profiles?.is_scam 
+        ? 'bg-red-950/25 border-2 border-red-500/70 shadow-red-500/15' 
+        : 'bg-[#1A1A2E] border border-[#3A3A52] hover:border-[#5C5A70]'
+    }`}>
       
       <div>
         {/* Dynamic Project Visual Header Layer */}
@@ -366,15 +388,10 @@ function ProjectCard({
               }`}>
                 {p.category?.toUpperCase() || "WEB3"}
               </span>
-              <span className="text-[9px] sm:text-[10px] text-[#A8A6B8] bg-[#0F0F1A]/50 px-1.5 sm:px-2 py-0.2 sm:py-0.5 rounded border border-[#3A3A52]/30 font-medium truncate max-w-[80px] sm:max-w-none">{p.sector}</span>
+              <span className="text-[8px] sm:text-[10px] text-[#A8A6B8] bg-[#0F0F1A]/50 px-1.5 sm:px-2 py-0.2 sm:py-0.5 rounded border border-[#3A3A52]/30 font-medium truncate max-w-[80px] sm:max-w-none">{p.sector}</span>
             </div>
             
-            {p.country && (
-              <span className="hidden sm:flex items-center gap-0.5 text-[11px] text-[#5C5A70]">
-                <MapPin size={10} />
-                {p.country}
-              </span>
-            )}
+            <MatchScoreBadge profile={profile} target={p} />
           </div>
 
           {/* Profile Card Center Content Layer */}
@@ -404,6 +421,8 @@ function ProjectCard({
                 <VerifiedBadge 
                   tier={p.tier || p.profiles?.subscription_tier} 
                   isVerified={p.profiles?.is_verified} 
+                  isScam={p.profiles?.is_scam}
+                  isBanned={p.profiles?.is_banned}
                   size={12} 
                 />
               </div>

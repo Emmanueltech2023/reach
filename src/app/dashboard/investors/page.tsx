@@ -5,12 +5,13 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft, Search, MessageCircle, CheckCircle,
-  TrendingUp, MapPin, Loader2, Filter, ShieldCheck, 
+  TrendingUp, MapPin, Loader2, Filter, ShieldCheck, User
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import DashboardShell from "@/components/DashboardShell";
 import TierBadge from "@/components/TierBadge";
 import VerifiedBadge from "@/components/VerifiedBadge";
+import UserProfileModal from "@/components/UserProfileModal";
 
 type Investor = {
   id: string;
@@ -27,6 +28,8 @@ type Investor = {
   trust_score: number;
   banner_url: string | null;
   subscription_tier?: string | null;
+  is_scam?: boolean;
+  is_banned?: boolean;
 };
 
 const AVATAR_COLORS = [
@@ -62,6 +65,7 @@ export default function InvestorDiscoveryPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState("All");
+  const [selectedInvestor, setSelectedInvestor] = useState<Investor | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [profile, setProfile] = useState<{ role?: string; full_name?: string; username?: string } | null>(null);
 
@@ -236,13 +240,31 @@ export default function InvestorDiscoveryPage() {
                           )}
                         </div>
                         
-                        <button
-                          onClick={() => startChat(inv.id)}
-                          className="flex items-center gap-1 sm:gap-1.5 bg-[#C9A84C] text-[#1A1A2E] text-[10px] sm:text-[11px] font-bold uppercase tracking-wider px-2 sm:px-4 py-1 sm:py-2.5 rounded-md sm:rounded-lg hover:bg-[#b5953e] transition duration-150 shadow-md shadow-[#C9A84C]/10"
-                        >
-                          <MessageCircle size={12} className="sm:w-3.5 sm:h-3.5" />
-                          <span>Pitch</span>
-                        </button>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedInvestor(inv);
+                            }}
+                            className="flex items-center gap-1 bg-[#1A1A2E] text-[#A8A6B8] hover:text-[#F5F3ED] hover:bg-[#252542] border border-[#3A3A52] text-[10px] sm:text-xs font-semibold px-2 sm:px-3 py-1 sm:py-2 rounded-md sm:rounded-lg transition cursor-pointer"
+                          >
+                            <User size={12} className="sm:w-3.5 sm:h-3.5" />
+                            <span>Profile</span>
+                          </button>
+                          
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              startChat(inv.id);
+                            }}
+                            className="flex items-center gap-1 sm:gap-1.5 bg-[#C9A84C] text-[#1A1A2E] text-[10px] sm:text-[11px] font-bold uppercase tracking-wider px-2 sm:px-4 py-1 sm:py-2.5 rounded-md sm:rounded-lg hover:bg-[#b5953e] transition duration-150 shadow-md shadow-[#C9A84C]/10 cursor-pointer"
+                          >
+                            <MessageCircle size={12} className="sm:w-3.5 sm:h-3.5" />
+                            <span>Pitch</span>
+                          </button>
+                        </div>
                       </div>
 
                       <div className="space-y-0.5 sm:space-y-1">
@@ -252,7 +274,9 @@ export default function InvestorDiscoveryPage() {
                           </span>
                           <VerifiedBadge 
                             tier={inv.subscription_tier} 
-                            isVerified={inv.is_verified} 
+                            isVerified={inv.is_verified}
+                            isScam={inv.is_scam}
+                            isBanned={inv.is_banned}
                             size={13} 
                           />
                         </div>
@@ -335,6 +359,14 @@ export default function InvestorDiscoveryPage() {
           )}
         </div>
       </div>
+
+      {/* User Profile Lightbox Modal */}
+      <UserProfileModal
+        user={selectedInvestor}
+        isOpen={!!selectedInvestor}
+        onClose={() => setSelectedInvestor(null)}
+        currentUserId={currentUserId || undefined}
+      />
     </DashboardShell>
   );
 }

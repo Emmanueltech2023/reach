@@ -31,32 +31,31 @@ export async function GET(req: NextRequest) {
 
     const conversationIds = participations.map((p) => p.conversation_id);
 
-    // 2. Fetch conversations using our cached performance columns, alongside the other recipient's profile details
+    // 2. Fetch conversations metadata
     const { data: convos, error: convosError } = await supabase
       .from("conversations")
-      .select(`
-        id,
-        last_message_content,
-        last_message_at,
-        conversation_participants!inner (
-          user_id,
-          profiles (
-            id,
-            full_name,
-            username,
-            avatar_url,
-            is_verified,
-            subscription_tier,
-            trust_score,
-            role
-          )
-        )
-      `)
+      .select("id, last_message_content, last_message_at")
       .in("id", conversationIds)
-      .neq("conversation_participants.user_id", userId) // Filter out the current user from the joined structure
       .order("last_message_at", { ascending: false, nullsFirst: false });
 
     if (convosError) throw convosError;
+
+    // 3. Fetch other participants profiles for these conversations
+    const { data: otherParticipants, error: otherPartsError } = await supabase
+      .from("conversation_participants")
+      .select("conversation_id, user_id, profiles(id, full_name, username, avatar_url, is_verified, is_scam, is_banned, subscription_tier, trust_score, role)")
+      .in("conversation_id", conversationIds)
+      .neq("user_id", userId);
+
+    if (otherPartsError) throw otherPartsError;
+
+    // Map other participant profiles to conversations
+    const otherPartMap = new Map();
+    (otherParticipants || []).forEach((p: any) => {
+      if (p.conversation_id && p.profiles) {
+        otherPartMap.set(p.conversation_id, p);
+      }
+    });
 
     // 3. Simultaneously count unread counts across all matching spaces with a cleaner, single query lookup
     const { data: unreadCounts, error: unreadError } = await supabase
@@ -74,12 +73,9 @@ export async function GET(req: NextRequest) {
       unreadMap[msg.conversation_id] = (unreadMap[msg.conversation_id] || 0) + 1;
     });
 
-    // 4. Assemble the exact data contract expected by your WhatsApp UI page template
+    // 4. Assemble the exact data contract expected by your UI template
     const formattedConversations = (convos || []).map((c) => {
-      // Find the first matching participant that is not the current user
-      const otherPart = c.conversation_participants?.find(
-        (p: any) => p.user_id !== userId
-      );
+      const otherPart = otherPartMap.get(c.id);
 
       return {
         id: c.id,

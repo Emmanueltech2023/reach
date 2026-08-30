@@ -21,11 +21,13 @@ import {
   Users,
   Briefcase,
   ExternalLink,
+  User,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrency } from "@/components/CurrencyProvider";
 import TierBadge from "@/components/TierBadge";
 import VerifiedBadge from "@/components/VerifiedBadge";
+import UserProfileModal, { UserProfileData } from "@/components/UserProfileModal";
 
 type Project = {
   id: string;
@@ -57,6 +59,8 @@ type Investor = {
   trust_score: number;
   banner_url: string | null;
   subscription_tier?: string | null;
+  is_scam?: boolean;
+  is_banned?: boolean;
 };
 
 const FOCUS_FILTERS = ["All", "FinTech", "HealthTech", "DeFi", "EdTech", "AI/ML", "Web3", "SaaS"];
@@ -98,6 +102,7 @@ export default function BuilderDashboard() {
   const [loadingInvestors, setLoadingInvestors] = useState(true);
   const [investorSearch, setInvestorSearch] = useState("");
   const [activeFocusFilter, setActiveFocusFilter] = useState("All");
+  const [selectedInvestor, setSelectedInvestor] = useState<Investor | null>(null);
 
   const [myJobs, setMyJobs] = useState<any[]>([]);
   const [loadingJobs, setLoadingJobs] = useState(false);
@@ -348,7 +353,11 @@ export default function BuilderDashboard() {
                 {filteredInvestors.map((inv) => (
                   <div
                     key={inv.id}
-                    className="group bg-[#1A1A2E] border border-[#3A3A52] hover:border-[#C9A84C60] rounded-xl overflow-hidden flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 shadow-lg shadow-black/20"
+                    className={`group rounded-xl overflow-hidden flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 shadow-lg shadow-black/20 ${
+                      inv.is_scam 
+                        ? 'bg-red-950/25 border-2 border-red-500/70 shadow-red-500/15' 
+                        : 'bg-[#1A1A2E] border border-[#3A3A52] hover:border-[#C9A84C60]'
+                    }`}
                   >
                     <div>
                       {/* Banner */}
@@ -385,13 +394,31 @@ export default function BuilderDashboard() {
                             )}
                           </div>
                           
-                          <button
-                            onClick={() => startChat(inv.id)}
-                            className="flex items-center gap-1 sm:gap-1.5 bg-[#C9A84C] text-[#1A1A2E] text-[10px] sm:text-xs font-bold px-2 sm:px-4 py-1 sm:py-2 rounded-md sm:rounded-lg hover:bg-[#b5953e] transition duration-150 shadow-md shadow-[#C9A84C]/20"
-                          >
-                            <MessageCircle size={12} className="sm:w-3.5 sm:h-3.5" />
-                            <span>Pitch</span>
-                          </button>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedInvestor(inv);
+                              }}
+                              className="flex items-center gap-1 bg-[#1A1A2E] text-[#A8A6B8] hover:text-[#F5F3ED] hover:bg-[#252542] border border-[#3A3A52] text-[10px] sm:text-xs font-semibold px-2 sm:px-3 py-1 sm:py-2 rounded-md sm:rounded-lg transition cursor-pointer"
+                            >
+                              <User size={12} className="sm:w-3.5 sm:h-3.5" />
+                              <span>Profile</span>
+                            </button>
+                            
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                startChat(inv.id);
+                              }}
+                              className="flex items-center gap-1 sm:gap-1.5 bg-[#C9A84C] text-[#1A1A2E] text-[10px] sm:text-xs font-bold px-2 sm:px-4 py-1 sm:py-2 rounded-md sm:rounded-lg hover:bg-[#b5953e] transition duration-150 shadow-md shadow-[#C9A84C]/20 cursor-pointer"
+                            >
+                              <MessageCircle size={12} className="sm:w-3.5 sm:h-3.5" />
+                              <span>Pitch</span>
+                            </button>
+                          </div>
                         </div>
 
                         {/* Details */}
@@ -402,7 +429,9 @@ export default function BuilderDashboard() {
                             </span>
                             <VerifiedBadge 
                               tier={inv.subscription_tier} 
-                              isVerified={inv.is_verified} 
+                              isVerified={inv.is_verified}
+                              isScam={inv.is_scam}
+                              isBanned={inv.is_banned}
                               size={13} 
                             />
                           </div>
@@ -755,6 +784,14 @@ export default function BuilderDashboard() {
         )}
 
       </div>
+
+      {/* User Profile Lightbox Modal */}
+      <UserProfileModal
+        user={selectedInvestor}
+        isOpen={!!selectedInvestor}
+        onClose={() => setSelectedInvestor(null)}
+        currentUserId={currentUserId || undefined}
+      />
     </DashboardShell>
   );
 }

@@ -1,47 +1,100 @@
-import { Resend } from "resend";
+// ─── Brevo Transactional Email Integration ────────────────────────────────────
+// Uses Brevo API v3 (https://api.brevo.com/v3/smtp/email)
 
-const FROM = process.env.RESEND_FROM_EMAIL || "REACH <onboarding@resend.dev>";
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+const BREVO_API_KEY = process.env.BREVO_API_KEY || process.env.RESEND_API_KEY;
+let cachedSenderEmail: string | null = process.env.BREVO_SENDER_EMAIL || process.env.BREVO_FROM_EMAIL || null;
+const SENDER_NAME = process.env.BREVO_SENDER_NAME || "REACH Platform";
+const rawAppUrl = process.env.NEXT_PUBLIC_APP_URL || "";
+const APP_URL = (rawAppUrl && !rawAppUrl.includes("your-vercel-url")) ? rawAppUrl : "http://localhost:3000";
 
-type EmailPayload = {
+export type EmailPayload = {
   to: string;
   subject: string;
   html: string;
+  senderName?: string;
+  senderEmail?: string;
 };
 
-export async function sendEmail({ to, subject, html }: EmailPayload) {
-  // 1. Check for the key first
-  const apiKey = process.env.RESEND_API_KEY;
-  
-  if (!apiKey) {
-    console.log("[Email] No API key — skipping:", subject, "to", to);
-    return { success: false };
-  }
-
-  // 2. Initialize only when we actually need it
-  const resend = new Resend(apiKey);
+/**
+ * Auto-discovers the account's first verified sender email from Brevo API if not explicitly set.
+ */
+async function getVerifiedSenderEmail(apiKey: string): Promise<string> {
+  if (cachedSenderEmail) return cachedSenderEmail;
 
   try {
-    const { data, error } = await resend.emails.send({
-      from: FROM,
-      to,
-      subject,
-      html,
+    const res = await fetch("https://api.brevo.com/v3/senders", {
+      headers: {
+        "api-key": apiKey,
+        "Accept": "application/json",
+      },
     });
 
-    if (error) {
-      console.error("[Email] Send error:", error);
-      return { success: false, error };
+    if (res.ok) {
+      const data = await res.json();
+      const senders = data.senders || [];
+      const activeSender = senders.find((s: any) => s.active) || senders[0];
+      if (activeSender && typeof activeSender.email === "string") {
+        cachedSenderEmail = activeSender.email;
+        console.log("[Brevo Email] Auto-detected verified sender:", activeSender.email);
+        return activeSender.email;
+      }
+    }
+  } catch (err) {
+    console.warn("[Brevo Email] Sender discovery notice:", err);
+  }
+
+  // Fallback
+  return "noreply@reach-platform.com";
+}
+
+/**
+ * Sends a transactional email using the Brevo API v3.
+ */
+export async function sendEmail({ to, subject, html, senderName, senderEmail }: EmailPayload) {
+  const apiKey = BREVO_API_KEY;
+
+  if (!apiKey) {
+    console.log("[Brevo Email] No API key set (BREVO_API_KEY) — skipping dispatch:", subject, "to", to);
+    return { success: false, error: "Missing BREVO_API_KEY" };
+  }
+
+  const effectiveSenderEmail = senderEmail || await getVerifiedSenderEmail(apiKey);
+
+  try {
+    const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+      method: "POST",
+      headers: {
+        "api-key": apiKey,
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+      },
+      body: JSON.stringify({
+        sender: {
+          name: senderName || SENDER_NAME,
+          email: effectiveSenderEmail,
+        },
+        to: [{ email: to }],
+        subject,
+        htmlContent: html,
+      }),
+    });
+
+    const resJson = await response.json();
+
+    if (!response.ok) {
+      console.error("[Brevo Email] Send failed:", resJson);
+      return { success: false, error: resJson.message || "Failed to send Brevo email" };
     }
 
-    return { success: true, data };
+    console.log("[Brevo Email] Sent successfully to:", to, "MessageId:", resJson.messageId || resJson);
+    return { success: true, data: resJson };
   } catch (err) {
-    console.error("[Email] Exception:", err);
-    return { success: false };
+    console.error("[Brevo Email] Exception during dispatch:", err);
+    return { success: false, error: String(err) };
   }
 }
 
-// Email templates
+// ─── Rich HTML Email Templates ────────────────────────────────────────────────
 export const emailTemplates = {
   welcome: (name: string) => `
     <!DOCTYPE html>

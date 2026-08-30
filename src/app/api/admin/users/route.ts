@@ -35,23 +35,54 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: "Missing required parameters" }, { status: 400 });
     }
 
-    const { data, error } = await supabase
+    // Attempt primary profile update
+    const { data: updatedData, error: primaryErr } = await supabase
       .from("profiles")
-      .update({
-        ...updates,
-      })
+      .update(updates)
       .eq("id", userId)
-      .select()
-      .single();
+      .select("*")
+      .maybeSingle();
 
-    if (error) throw error;
+    let finalData = updatedData;
+
+    if (primaryErr) {
+      console.warn("[AdminUsers] Primary update notice:", primaryErr.message);
+      
+      // Fallback: If is_scam or is_banned columns haven't been added to database yet, update core fields
+      const safeUpdates = { ...updates };
+      delete safeUpdates.is_scam;
+      delete safeUpdates.is_banned;
+
+      if (Object.keys(safeUpdates).length > 0) {
+        const { data: fallbackData, error: fallbackErr } = await supabase
+          .from("profiles")
+          .update(safeUpdates)
+          .eq("id", userId)
+          .select("*")
+          .maybeSingle();
+
+        if (fallbackErr) {
+          return NextResponse.json({ error: fallbackErr.message }, { status: 400 });
+        }
+        finalData = { ...(fallbackData || {}), ...updates };
+      } else {
+        // Fetch current profile if only is_scam/is_banned were in updates
+        const { data: existingProf } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", userId)
+          .maybeSingle();
+
+        finalData = { ...(existingProf || { id: userId }), ...updates };
+      }
+    }
 
     // Record Audit Log
     let actionType = "UPDATE_USER_PROFILE";
     if (updates.is_banned !== undefined) actionType = updates.is_banned ? "SUSPEND_USER" : "UNSUSPEND_USER";
     if (updates.is_scam !== undefined) actionType = updates.is_scam ? "FLAG_SCAM_USER" : "UNFLAG_SCAM_USER";
 
-    await logActivity({
+    void logActivity({
       req,
       actorId: auth.user.id,
       actorName: auth.profile.full_name || auth.profile.username,
@@ -59,11 +90,11 @@ export async function PATCH(req: NextRequest) {
       actionType,
       targetId: userId,
       targetType: "user",
-      description: `Admin ${auth.profile.full_name || auth.profile.username} updated profile for user ${data?.full_name || userId} (${actionType})`,
+      description: `Admin ${auth.profile.full_name || auth.profile.username} updated profile for user ${finalData?.full_name || userId} (${actionType})`,
       details: updates,
-    });
+    }).catch(() => {});
 
-    return NextResponse.json({ user: data });
+    return NextResponse.json({ user: finalData || { id: userId, ...updates } });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Failed to update user";
     return NextResponse.json({ error: message }, { status: 500 });

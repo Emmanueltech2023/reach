@@ -17,10 +17,17 @@ export async function GET(req: NextRequest) {
     }
 
     const authHeader = req.headers.get("Authorization");
-    if (authHeader) {
-      const { data: { user } } = await supabase.auth.getUser(authHeader.replace("Bearer ", ""));
-      if (user && user.id !== userId) {
-        return NextResponse.json({ error: "Unauthorized access to notifications" }, { status: 403 });
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      try {
+        const token = authHeader.replace("Bearer ", "").trim();
+        if (token) {
+          const { data: { user } } = await supabase.auth.getUser(token);
+          if (user && user.id !== userId) {
+            return NextResponse.json({ error: "Unauthorized access to notifications" }, { status: 403 });
+          }
+        }
+      } catch (authErr) {
+        console.warn("Non-blocking auth header validation notice in notifications:", authErr);
       }
     }
 
@@ -28,6 +35,7 @@ export async function GET(req: NextRequest) {
       .from("notifications")
       .select("*")
       .eq("user_id", userId)
+      .neq("type", "message")
       .order("created_at", { ascending: false });
 
     if (error) throw error;

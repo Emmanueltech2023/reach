@@ -11,13 +11,14 @@ import {
   ShieldCheck, AlertTriangle, TrendingUp,
   Clock, ChevronDown, Info, Zap, Sparkles,
   Edit2, Trash2, Copy, Flag, Check, Download, AlertCircle, FileCheck, Shield, Lock,
-  MoreVertical, MoreHorizontal, Briefcase, ChevronRight,
+  MoreVertical, MoreHorizontal, Briefcase, ChevronRight, Bot, Headphones,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useVoiceRecorder } from "@/lib/useVoiceRecorder";
 import { useSubscription } from "@/hooks/useSubscription";
 import TierBadge from "@/components/TierBadge";
 import VerifiedBadge from "@/components/VerifiedBadge";
+import DocumentWatermarkViewer from "@/components/DocumentWatermarkViewer";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -30,6 +31,8 @@ type Profile = {
   subscription_tier: string;
   trust_score: number;
   role?: string;
+  is_scam?: boolean;
+  is_banned?: boolean;
 };
 
 type Message = {
@@ -177,6 +180,11 @@ function ChatsInner() {
     agreed: false,
   });
   const [signingNda, setSigningNda] = useState(false);
+  const [watermarkModal, setWatermarkModal] = useState<{ isOpen: boolean; url: string; title: string }>({
+    isOpen: false,
+    url: "",
+    title: "",
+  });
 
   // Mobile
   const [mobileView, setMobileView] = useState<"list" | "chat">(
@@ -190,8 +198,9 @@ function ChatsInner() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const activeConvo = conversations.find((c) => c.id === activeConversationId);
-  const isTalentConvo = currentUser?.role === "talent" || activeConvo?.otherUser?.role === "talent";
-  const dealStageInfo = (!isTalentConvo && activeConvo?.dealStage)
+  const isConciergeConvo = activeConvo?.otherUser?.role === "admin" || activeConvo?.otherUser?.full_name?.toLowerCase().includes("concierge");
+  const isTalentConvo = !isConciergeConvo && (currentUser?.role === "talent" || activeConvo?.otherUser?.role === "talent");
+  const dealStageInfo = (!isTalentConvo && !isConciergeConvo && activeConvo?.dealStage)
     ? DEAL_STAGE_CONFIG[activeConvo.dealStage]
     : null;
 
@@ -226,13 +235,23 @@ function ChatsInner() {
   const handleOpenConcierge = async () => {
     if (!currentUser) return;
     try {
-      // Find admin account
-      const { data: adminUser } = await supabase
+      // Find admin profile or fallback profile
+      let { data: adminUser } = await supabase
         .from("profiles")
         .select("id, full_name")
         .eq("role", "admin")
         .limit(1)
         .maybeSingle();
+
+      if (!adminUser) {
+        const { data: firstUser } = await supabase
+          .from("profiles")
+          .select("id, full_name")
+          .neq("id", currentUser.id)
+          .limit(1)
+          .maybeSingle();
+        adminUser = firstUser;
+      }
 
       if (adminUser && adminUser.id !== currentUser.id) {
         const res = await fetch("/api/conversations/start", {
@@ -255,9 +274,6 @@ function ChatsInner() {
     } catch (e) {
       console.error("Concierge conversation init error:", e);
     }
-
-    // Fallback to priority email channel
-    window.open("mailto:support@reachinvestment.com?subject=Priority%20VIP%20Concierge%20Support", "_blank");
   };
 
   // ─── Init ─────────────────────────────────────────────────────────────────
@@ -390,11 +406,16 @@ function ChatsInner() {
 
   const markRead = async () => {
     if (!activeConversationId || !currentUser) return;
-    await fetch("/api/messages/read", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ conversationId: activeConversationId, userId: currentUser.id }),
-    });
+    try {
+      await fetch("/api/messages/read", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversationId: activeConversationId, userId: currentUser.id }),
+      });
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("messages-read", { detail: { conversationId: activeConversationId } }));
+      }
+    } catch {}
   };
 
   // ─── Moderation ───────────────────────────────────────────────────────────
@@ -434,29 +455,41 @@ function ChatsInner() {
     if (!activeConversationId || !currentUser) return;
     setSending(true);
 
-    const res = await fetch("/api/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        conversationId: activeConversationId,
-        senderId: currentUser.id,
-        content,
-        messageType: "text",
-      }),
-    });
+    try {
+      const res = await fetch("/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          conversationId: activeConversationId,
+          senderId: currentUser.id,
+          content,
+          messageType: "text",
+        }),
+      });
 
-    if (!res.ok) {
       const data = await res.json();
-      if (data.upgradeRequired) {
-        setUpgradePrompt(data.error);
-        setInput(content);
-      }
-      if (data.moderated) {
-        setBlockedMessage(data.error);
-      }
-    }
 
-    setSending(false);
+      if (res.ok) {
+        if (data.message) {
+          setMessages((prev) => (prev.find((m) => m.id === data.message.id) ? prev : [...prev, data.message]));
+        } else {
+          await fetchMessages(activeConversationId);
+        }
+        await fetchConversations(currentUser.id);
+      } else {
+        if (data.upgradeRequired) {
+          setUpgradePrompt(data.error);
+          setInput(content);
+        }
+        if (data.flagged || data.moderated) {
+          setBlockedMessage(data.reason || data.error);
+        }
+      }
+    } catch (err) {
+      console.error("Message dispatch exception:", err);
+    } finally {
+      setSending(false);
+    }
   };
 
   const sendMessage = async () => {
@@ -883,7 +916,29 @@ function ChatsInner() {
           )}
 
           {/* Conversations */}
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto p-2 space-y-1">
+            {/* Pinned REACH Live Concierge Bot Hotline */}
+            <button
+              onClick={handleOpenConcierge}
+              className="w-full flex items-center gap-3 p-3 rounded-2xl bg-gradient-to-r from-[#C9A84C]/15 to-[#1A1A2E] border border-[#C9A84C]/40 hover:border-[#C9A84C] transition text-left cursor-pointer shadow-lg shadow-[#C9A84C]/5"
+            >
+              <div className="w-10 h-10 rounded-xl bg-[#0F0F1A] border border-[#C9A84C]/50 flex items-center justify-center shrink-0 p-1.5 overflow-hidden shadow-md shadow-[#C9A84C]/10">
+                <img
+                  src="/logo-icon.png"
+                  alt="REACH Concierge AI"
+                  className="w-full h-full object-contain"
+                />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-[#F5F3ED] truncate">REACH Live Concierge</h4>
+                  <span className="text-[9px] uppercase font-bold text-[#C9A84C] bg-[#C9A84C]/20 px-1.5 py-0.5 rounded flex items-center gap-1">
+                    <Sparkles size={10} /> 24/7 Bot
+                  </span>
+                </div>
+                <p className="text-[11px] text-[#A8A6B8] truncate mt-0.5">Click for instant AI platform support</p>
+              </div>
+            </button>
             {loadingConvos ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 size={18} className="text-[#C9A84C] animate-spin" />
@@ -991,8 +1046,14 @@ function ChatsInner() {
                     </button>
 
                     {/* Avatar */}
-                    <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-[#1A1A2E] border border-[#2A2A3E] flex items-center justify-center text-xs font-medium text-[#C9A84C] shrink-0 relative overflow-hidden">
-                      {activeConvo.otherUser?.avatar_url ? (
+                    <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-[#0F0F1A] border border-[#C9A84C]/50 flex items-center justify-center p-1.5 shrink-0 relative overflow-hidden shadow-md">
+                      {isConciergeConvo ? (
+                        <img
+                          src="/logo-icon.png"
+                          alt="REACH Concierge AI"
+                          className="w-full h-full object-contain"
+                        />
+                      ) : activeConvo.otherUser?.avatar_url ? (
                         <img src={activeConvo.otherUser.avatar_url} alt="" className="w-full h-full object-cover" />
                       ) : (
                         getInitials(activeConvo.otherUser?.full_name || "?")
@@ -1002,16 +1063,31 @@ function ChatsInner() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 min-w-0">
                         <span className="text-[#F0EEE8] text-sm font-semibold truncate">
-                          {activeConvo.otherUser?.full_name}
+                          {isConciergeConvo ? "REACH Live Concierge" : activeConvo.otherUser?.full_name}
                         </span>
-                        <VerifiedBadge 
-                          tier={activeConvo.otherUser?.subscription_tier} 
-                          isVerified={activeConvo.otherUser?.is_verified} 
-                          size={14} 
-                        />
+                        {!isConciergeConvo && (
+                          <VerifiedBadge 
+                            tier={activeConvo.otherUser?.subscription_tier} 
+                            isVerified={activeConvo.otherUser?.is_verified} 
+                            isScam={activeConvo.otherUser?.is_scam}
+                            isBanned={activeConvo.otherUser?.is_banned}
+                            size={14} 
+                          />
+                        )}
+                        {isConciergeConvo && (
+                          <span className="text-[9px] uppercase font-bold text-[#C9A84C] bg-[#C9A84C]/20 px-1.5 py-0.5 rounded flex items-center gap-1">
+                            <Sparkles size={10} /> 24/7 Bot
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-2 text-[11px] text-[#5C5A70] truncate">
-                        {isTalentConvo ? (
+                        {isConciergeConvo ? (
+                          <span className="text-[#C9A84C] font-medium">Automated Support & FAQ Guidance</span>
+                        ) : activeConvo.otherUser?.is_scam ? (
+                          <span className="text-red-400 font-extrabold flex items-center gap-1">
+                            <AlertTriangle size={10} /> FRAUD / SCAM ALERT
+                          </span>
+                        ) : isTalentConvo ? (
                           <span className="flex items-center gap-1 text-[#C9A84C] font-medium">
                             <Briefcase size={10} />
                             {activeConvo.otherUser?.role === "talent" ? "Job Candidate" : "Hiring Manager"}
@@ -1021,46 +1097,61 @@ function ChatsInner() {
                         ) : (
                           <span className="capitalize">{activeConvo.otherUser?.role || "Member"}</span>
                         )}
-                        <span className="hidden sm:inline">·</span>
-                        <span className="hidden sm:inline-flex items-center gap-1 text-[#5C5A70]">
-                          <Globe size={9} /> {isTalentConvo ? "Hiring Channel" : "Monitored"}
-                        </span>
+                        {!isConciergeConvo && (
+                          <>
+                            <span className="hidden sm:inline">·</span>
+                            <span className="hidden sm:inline-flex items-center gap-1 text-[#5C5A70]">
+                              <Globe size={9} /> {isTalentConvo ? "Hiring Channel" : "Monitored"}
+                            </span>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
 
-                  {/* Call and info buttons */}
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      onClick={() => startCall(false)}
-                      className="w-8 h-8 flex items-center justify-center border border-[#2A2A3E] bg-[#141424] hover:bg-[#1A1A2E] text-[#A8A6B8] hover:text-[#C9A84C] rounded-lg transition"
-                      title={isTalentConvo ? "Voice interview call" : "Voice call"}
-                    >
-                      <Phone size={14} />
-                    </button>
-                    <button
-                      onClick={() => startCall(true)}
-                      className="w-8 h-8 flex items-center justify-center border border-[#2A2A3E] bg-[#141424] hover:bg-[#1A1A2E] text-[#A8A6B8] hover:text-[#C9A84C] rounded-lg transition"
-                      title={isTalentConvo ? "Video interview call" : "Video call"}
-                    >
-                      <Video size={14} />
-                    </button>
-                    <button
-                      onClick={() => setShowDealInfo(!showDealInfo)}
-                      className={`w-8 h-8 flex items-center justify-center border rounded-lg transition ${
-                        showDealInfo
-                          ? "bg-[#C9A84C]/20 border-[#C9A84C]/50 text-[#C9A84C]"
-                          : "border-[#2A2A3E] bg-[#141424] hover:bg-[#1A1A2E] text-[#A8A6B8] hover:text-[#F5F3ED]"
-                      }`}
-                      title={isTalentConvo ? "Hiring & Role Info" : "Deal info"}
-                    >
-                      {isTalentConvo ? <Briefcase size={14} /> : <Info size={14} />}
-                    </button>
-                  </div>
+                  {/* Call and info buttons (Hidden for Concierge Bot) */}
+                  {!isConciergeConvo && (
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => startCall(false)}
+                        className="w-8 h-8 flex items-center justify-center border border-[#2A2A3E] bg-[#141424] hover:bg-[#1A1A2E] text-[#A8A6B8] hover:text-[#C9A84C] rounded-lg transition"
+                        title={isTalentConvo ? "Voice interview call" : "Voice call"}
+                      >
+                        <Phone size={14} />
+                      </button>
+                      <button
+                        onClick={() => startCall(true)}
+                        className="w-8 h-8 flex items-center justify-center border border-[#2A2A3E] bg-[#141424] hover:bg-[#1A1A2E] text-[#A8A6B8] hover:text-[#C9A84C] rounded-lg transition"
+                        title={isTalentConvo ? "Video interview call" : "Video call"}
+                      >
+                        <Video size={14} />
+                      </button>
+                      <button
+                        onClick={() => setShowDealInfo(!showDealInfo)}
+                        className={`w-8 h-8 flex items-center justify-center border rounded-lg transition ${
+                          showDealInfo
+                            ? "bg-[#C9A84C]/20 border-[#C9A84C]/50 text-[#C9A84C]"
+                            : "border-[#2A2A3E] bg-[#141424] hover:bg-[#1A1A2E] text-[#A8A6B8] hover:text-[#F5F3ED]"
+                        }`}
+                        title={isTalentConvo ? "Hiring & Role Info" : "Deal info"}
+                      >
+                        {isTalentConvo ? <Briefcase size={14} /> : <Info size={14} />}
+                      </button>
+                    </div>
+                  )}
                 </div>
 
-                {/* Sub-bar: Talent channel vs Deal stage */}
-                {isTalentConvo ? (
+                {/* Sub-bar: Concierge support channel vs Talent channel vs Deal stage */}
+                {isConciergeConvo ? (
+                  <div className="flex items-center justify-between px-4 py-2 border-t border-[#1A1A2E] bg-[#C9A84C08]">
+                    <div className="flex items-center gap-2">
+                      <Bot size={13} className="text-[#C9A84C]" />
+                      <span className="text-xs font-medium text-[#C9A84C]">
+                        REACH 24/7 Platform Assistant & FAQ Guidance Channel
+                      </span>
+                    </div>
+                  </div>
+                ) : isTalentConvo ? (
                   <div className="flex items-center justify-between px-4 py-2 border-t border-[#1A1A2E] bg-[#C9A84C08]">
                     <div className="flex items-center gap-2">
                       <Briefcase size={13} className="text-[#C9A84C]" />
@@ -2172,6 +2263,15 @@ function ChatsInner() {
           </div>
         </div>
       )}
+
+      {/* Confidential Document Watermark & NDA Viewer */}
+      <DocumentWatermarkViewer
+        isOpen={watermarkModal.isOpen}
+        onClose={() => setWatermarkModal({ isOpen: false, url: "", title: "" })}
+        documentUrl={watermarkModal.url}
+        documentTitle={watermarkModal.title || "Confidential Document"}
+        userName={currentUser?.full_name || "REACH Member"}
+      />
     </div>
   );
 }

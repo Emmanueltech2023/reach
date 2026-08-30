@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
 
     let query = supabase
       .from('jobs')
-      .select('*, profiles(id, full_name, username, avatar_url, is_verified, subscription_tier, role)');
+      .select('*, profiles(id, full_name, username, avatar_url, is_verified, is_scam, is_banned, subscription_tier, role)');
 
     // When fetching own jobs (manage page), show all including drafts
     if (postedBy) {
@@ -107,6 +107,64 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (error) throw error;
+
+    // Dispatch priority notification & email for Pro/Premium Talent users
+    try {
+      const { data: proTalentProfiles } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('role', 'talent')
+        .in('subscription_tier', ['pro', 'premium']);
+
+      if (proTalentProfiles && proTalentProfiles.length > 0) {
+        const notifInserts = proTalentProfiles.map((p: any) => ({
+          user_id: p.id,
+          title: `⚡ Priority Job Access: ${title}`,
+          body: `${companyName} just posted a new position for ${title}. As a Pro talent member, you get 24h early access to apply.`,
+          type: 'job_application',
+          action_url: `/dashboard/talent/job/${data.id}`,
+        }));
+
+        const { error: insErr } = await supabase.from('notifications').insert(notifInserts);
+        if (insErr) console.warn('Pro talent notif insert error:', insErr);
+
+        // Dispatch email to Pro talent members via Supabase Auth Admin
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+        const { sendEmail } = await import('@/lib/email');
+
+        for (const target of proTalentProfiles) {
+          const { data: authUser } = await supabase.auth.admin.getUserById(target.id);
+          if (authUser?.user?.email) {
+            void sendEmail({
+              to: authUser.user.email,
+              subject: `⚡ Priority Job Alert: ${title} at ${companyName}`,
+              html: `
+                <!DOCTYPE html>
+                <html>
+                <body style="font-family: -apple-system, sans-serif; background: #0F0F1A; color: #F5F3ED; padding: 40px 20px; margin: 0;">
+                  <div style="max-width: 520px; margin: 0 auto; background: #1A1A2E; border-radius: 16px; padding: 32px; border: 1px solid #3A3A52;">
+                    <h1 style="font-size: 22px; font-weight: 700; color: #F5F3ED; margin: 0 0 6px;">R<span style="color: #C9A84C;">EACH</span></h1>
+                    <p style="color: #C9A84C; font-size: 11px; margin: 0 0 24px; text-transform: uppercase; letter-spacing: 0.5px;">Pro Talent Early Access</p>
+                    <h2 style="font-size: 18px; font-weight: 700; color: #C9A84C; margin: 0 0 12px;">⚡ Priority Job Listing Posted!</h2>
+                    <p style="color: #A8A6B8; font-size: 14px; line-height: 1.6; margin: 0 0 20px;">
+                      <strong style="color: #F5F3ED;">${companyName}</strong> just posted a new opening for <strong style="color: #C9A84C;">${title}</strong>. As a Pro Talent member, your profile gets highlighted to recruiters.
+                    </p>
+                    <a href="${appUrl}/dashboard/talent/job/${data.id}" 
+                       style="display: inline-block; background: #C9A84C; color: #0A0A0F; padding: 12px 24px; border-radius: 10px; text-decoration: none; font-weight: 700; font-size: 14px;">
+                      View & Apply First
+                    </a>
+                  </div>
+                </body>
+                </html>
+              `
+            }).catch((e) => console.warn('Pro talent email dispatch error:', e));
+          }
+        }
+      }
+    } catch (notifErr) {
+      console.warn('Non-blocking pro talent notification error:', notifErr);
+    }
+
     return NextResponse.json(data);
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });

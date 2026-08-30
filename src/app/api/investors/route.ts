@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
 
     let query = supabase
       .from("profiles")
-      .select("id, full_name, username, avatar_url, is_verified, country, bio, investment_focus, min_ticket_size, max_ticket_size, total_invested, trust_score, banner_url, is_anonymous, subscription_tier, created_at")
+      .select("id, full_name, username, avatar_url, is_verified, is_scam, is_banned, country, bio, investment_focus, min_ticket_size, max_ticket_size, total_invested, trust_score, banner_url, is_anonymous, subscription_tier, created_at")
       .eq("role", "investor")
       .order("is_verified", { ascending: false })
       .order("trust_score", { ascending: false })

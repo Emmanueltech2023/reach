@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   Users, ShieldCheck, TrendingUp, DollarSign, CheckCircle,
@@ -194,10 +194,14 @@ export default function AdminPage() {
     estimatedMRR: 0,
   });
 
-  const showNotification = (msg: string) => {
+  const notifTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const showNotification = useCallback((msg: string) => {
+    if (notifTimerRef.current) clearTimeout(notifTimerRef.current);
     setActionMessage(msg);
-    setTimeout(() => setActionMessage(null), 3500);
-  };
+    notifTimerRef.current = setTimeout(() => {
+      setActionMessage(null);
+    }, 3500);
+  }, []);
 
   const fetchAdminData = useCallback(async () => {
     setLoading(true);
@@ -627,6 +631,7 @@ export default function AdminPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId, updates }),
       });
+      const data = await res.json();
       if (res.ok) {
         setProfiles((prev) =>
           prev.map((p) => (p.id === userId ? { ...p, ...updates } : p))
@@ -636,9 +641,12 @@ export default function AdminPage() {
             ? "⚠️ User flagged as SCAM / FRAUD ALERT across platform!"
             : "Scam warning removed from user profile."
         );
+      } else {
+        showNotification(data.error || "Failed to update scam status");
       }
     } catch (err) {
       console.error("Scam toggle failed:", err);
+      showNotification("Network error executing scam toggle");
     }
   };
 
@@ -650,6 +658,7 @@ export default function AdminPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId, updates: { is_banned: nextBan } }),
       });
+      const data = await res.json();
       if (res.ok) {
         setProfiles((prev) =>
           prev.map((p) => (p.id === userId ? { ...p, is_banned: nextBan } : p))
@@ -659,9 +668,12 @@ export default function AdminPage() {
             ? "🚫 User account SUSPENDED / BANNED from platform."
             : "User account unsuspended."
         );
+      } else {
+        showNotification(data.error || "Failed to update suspension status");
       }
     } catch (err) {
       console.error("Ban toggle failed:", err);
+      showNotification("Network error executing suspension toggle");
     }
   };
 
@@ -1482,7 +1494,7 @@ export default function AdminPage() {
                           </tr>
                         ) : (
                           filteredUsers.map((user) => (
-                            <tr key={user.id} className={`hover:bg-[#2A2A3E]/30 transition ${user.is_scam ? 'bg-red-500/5' : user.is_banned ? 'bg-zinc-500/5' : ''}`}>
+                            <tr key={user.id} className={`hover:bg-[#2A2A3E]/30 transition ${user.is_scam ? 'bg-red-950/40 border-l-4 border-red-500' : user.is_banned ? 'bg-zinc-900/60 border-l-4 border-zinc-500 opacity-60' : ''}`}>
                               <td className="px-5 py-3.5">
                                 <div className="flex items-center gap-3">
                                   <div className="w-9 h-9 rounded-full bg-[#0A0A0F] border border-[#3A3A52] overflow-hidden flex items-center justify-center shrink-0">
@@ -1498,8 +1510,8 @@ export default function AdminPage() {
                                     <div className="flex items-center gap-1.5 flex-wrap">
                                       <span className="font-bold text-[#F5F3ED]">{user.full_name}</span>
                                       {user.is_scam && (
-                                        <span className="px-1.5 py-0.2 rounded text-[9px] font-black uppercase bg-red-600/30 text-red-400 border border-red-500/60">
-                                          ⚠️ SCAM
+                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-red-500/20 text-red-400 border border-red-500/60 shadow-[0_0_10px_rgba(239,68,68,0.3)] animate-pulse">
+                                          ⚠️ SCAM / FRAUD ALERT
                                         </span>
                                       )}
                                       {user.is_banned && (
@@ -1526,10 +1538,17 @@ export default function AdminPage() {
                               </td>
                               <td className="px-5 py-3.5">
                                 <div className="font-medium text-[#F5F3ED]">{user.country || "—"}</div>
-                                <div className="text-[10px] text-[#C9A84C] flex items-center gap-0.5">
-                                  <Star className="h-2.5 w-2.5 fill-current" />
-                                  <span>Score: {user.trust_score ?? 85}</span>
-                                </div>
+                                {user.is_scam ? (
+                                  <div className="text-[10px] text-red-400 font-extrabold flex items-center gap-1">
+                                    <AlertTriangle className="h-3 w-3" />
+                                    <span>Score: 0 (FRAUD ALERT)</span>
+                                  </div>
+                                ) : (
+                                  <div className="text-[10px] text-[#C9A84C] flex items-center gap-0.5 font-medium">
+                                    <Star className="h-2.5 w-2.5 fill-current" />
+                                    <span>Score: {user.trust_score ?? 85}</span>
+                                  </div>
+                                )}
                               </td>
                               <td className="px-5 py-3.5">
                                 <select

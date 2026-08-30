@@ -47,6 +47,8 @@ interface Applicant {
     twitter?: string | null;
     category?: string | null;
     investment_focus?: string[] | null;
+    is_scam?: boolean;
+    is_banned?: boolean;
   };
 }
 
@@ -259,6 +261,8 @@ export default function ViewApplicantsPage() {
                           <VerifiedBadge 
                             tier={candProfile.subscription_tier} 
                             isVerified={candProfile.is_verified} 
+                            isScam={candProfile.is_scam}
+                            isBanned={candProfile.is_banned}
                             size={15} 
                           />
                           {isProTalent && (

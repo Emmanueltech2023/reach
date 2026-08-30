@@ -17,6 +17,8 @@ export async function GET() {
         username,
         avatar_url,
         is_verified,
+        is_scam,
+        is_banned,
         trust_score,
         subscription_tier
       )

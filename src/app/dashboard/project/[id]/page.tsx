@@ -5,13 +5,15 @@ import Image from "next/image";
 import { useRouter, useParams } from "next/navigation";
 import {
   ArrowLeft, MessageCircle, Bookmark, Share2, Handshake,
-  CheckCircle, Globe, X, MapPin, ExternalLink, Loader2, Calendar, Eye
+  CheckCircle, Globe, X, MapPin, ExternalLink, Loader2, Calendar, Eye, User
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import TierBadge from "@/components/TierBadge";
 import VerifiedBadge from "@/components/VerifiedBadge";
 import { useCurrency } from "@/components/CurrencyProvider";
 import KycModal from "@/components/KycModal";
+import UserProfileModal from "@/components/UserProfileModal";
+import DocumentWatermarkViewer from "@/components/DocumentWatermarkViewer";
 
 type Project = {
   id: string;
@@ -30,6 +32,7 @@ type Project = {
   twitter: string | null;
   logo_url: string | null;
   banner_url: string | null;
+  pitch_deck_url?: string | null;
   view_count: number;
   created_at: string;
   profiles: {
@@ -41,6 +44,8 @@ type Project = {
     trust_score: number;
     country: string;
     subscription_tier?: "free" | "pro" | "premium";
+    is_scam?: boolean;
+    is_banned?: boolean;
   };
 };
 
@@ -73,6 +78,8 @@ export default function ProjectDetailPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentUserProfile, setCurrentUserProfile] = useState<any>(null);
   const [showKycModal, setShowKycModal] = useState(false);
+  const [showFounderModal, setShowFounderModal] = useState(false);
+  const [showWatermarkModal, setShowWatermarkModal] = useState(false);
 
   useEffect(() => {
     const loadProjectData = async () => {
@@ -312,14 +319,40 @@ export default function ProjectDetailPage() {
               <p className="text-[#A8A6B8] text-sm leading-relaxed whitespace-pre-line">
                 {project.full_description}
               </p>
+
+              <div className="pt-2 border-t border-[#3A3A52]/40">
+                <button
+                  type="button"
+                  onClick={() => setShowWatermarkModal(true)}
+                  className="w-full sm:w-auto px-5 py-3 rounded-xl bg-[#C9A84C]/10 border border-[#C9A84C]/30 text-[#C9A84C] hover:bg-[#C9A84C]/20 text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer"
+                >
+                  <Eye size={15} /> View Confidential Pitch Deck (Watermark Protected)
+                </button>
+              </div>
             </div>
 
             {/* Founder Card Component */}
-            <div className="bg-[#1A1A2E]/30 border border-[#3A3A52]/40 rounded-xl p-5">
-              <h3 className="text-[#5C5A70] text-[10px] uppercase tracking-wider font-bold mb-4">Leadership Profiles</h3>
-              <div className="flex items-center justify-between gap-4 flex-wrap sm:flex-nowrap">
+            <div className="bg-[#1A1A2E]/30 border border-[#3A3A52]/40 rounded-xl p-5 hover:border-[#C9A84C]/40 transition group">
+              <div className="flex items-center justify-between gap-4 mb-4">
+                <h3 className="text-[#5C5A70] text-[10px] uppercase tracking-wider font-bold">Leadership Profiles</h3>
+                {project.profiles && (
+                  <button
+                    type="button"
+                    onClick={() => setShowFounderModal(true)}
+                    className="flex items-center gap-1 text-xs text-[#C9A84C] hover:underline font-semibold cursor-pointer"
+                  >
+                    <User size={13} />
+                    <span>View Profile</span>
+                  </button>
+                )}
+              </div>
+
+              <div 
+                onClick={() => setShowFounderModal(true)}
+                className="flex items-center justify-between gap-4 flex-wrap sm:flex-nowrap cursor-pointer"
+              >
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-[#C9A84C]/10 border border-[#C9A84C]/30 flex items-center justify-center text-sm font-bold text-[#C9A84C] shrink-0 overflow-hidden">
+                  <div className="w-12 h-12 rounded-full bg-[#C9A84C]/10 border border-[#C9A84C]/30 flex items-center justify-center text-sm font-bold text-[#C9A84C] shrink-0 overflow-hidden group-hover:border-[#C9A84C] transition">
                     {project.profiles?.avatar_url ? (
                       <Image src={project.profiles.avatar_url} alt="Founder Avatar" width={48} height={48} unoptimized className="w-full h-full object-cover" />
                     ) : (
@@ -328,10 +361,12 @@ export default function ProjectDetailPage() {
                   </div>
                   <div>
                     <div className="flex items-center gap-1.5">
-                      <span className="text-[#F5F3ED] text-sm font-semibold">{project.profiles?.full_name}</span>
+                      <span className="text-[#F5F3ED] text-sm font-semibold group-hover:text-[#C9A84C] transition">{project.profiles?.full_name}</span>
                       <VerifiedBadge 
                         tier={project.profiles?.subscription_tier || project.tier} 
                         isVerified={project.profiles?.is_verified} 
+                        isScam={project.profiles?.is_scam}
+                        isBanned={project.profiles?.is_banned}
                         size={15} 
                       />
                     </div>
@@ -543,7 +578,7 @@ export default function ProjectDetailPage() {
       </div>
 
       {/* Progressive Flow: Action-Gated KYC Verification Modal */}
-      {currentUserId && (
+      {currentUserId ? (
         <KycModal
           isOpen={showKycModal}
           onClose={() => setShowKycModal(false)}
@@ -554,7 +589,39 @@ export default function ProjectDetailPage() {
             if (currentUserProfile) setCurrentUserProfile({ ...currentUserProfile, kyc_status: "pending" });
           }}
         />
-      )}
+      ) : null}
+
+      {/* Founder Profile Modal */}
+      {project?.profiles ? (
+        <UserProfileModal
+          user={{
+            id: project.profiles.id,
+            full_name: project.profiles.full_name,
+            username: project.profiles.username,
+            avatar_url: project.profiles.avatar_url,
+            is_verified: project.profiles.is_verified,
+            is_scam: project.profiles.is_scam,
+            is_banned: project.profiles.is_banned,
+            trust_score: project.profiles.trust_score,
+            country: project.profiles.country,
+            subscription_tier: project.profiles.subscription_tier || project.tier,
+            role: "builder",
+          }}
+          isOpen={showFounderModal}
+          onClose={() => setShowFounderModal(false)}
+          currentUserId={currentUserId || undefined}
+        />
+      ) : null}
+
+      {/* Confidential Watermarked Document Viewer */}
+      <DocumentWatermarkViewer
+        isOpen={showWatermarkModal}
+        onClose={() => setShowWatermarkModal(false)}
+        documentUrl={project?.pitch_deck_url || project?.logo_url || "https://samples.leanpub.com/thereactnativebook-sample.pdf"}
+        documentTitle={`${project?.name || "Startup"} Confidential Pitch Deck`}
+        userName={currentUserProfile?.full_name || "Accredited Investor"}
+        companyName={project?.name || "REACH Deal Room"}
+      />
     </div>
   );
 }

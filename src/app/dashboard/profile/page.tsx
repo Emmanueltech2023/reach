@@ -7,10 +7,10 @@ import DashboardShell from "@/components/DashboardShell";
 import UpgradeGate from "@/components/UpgradeGate";
 import { useSubscription } from "@/hooks/useSubscription";
 import {
-  Camera, CheckCircle, Globe, X,
+  Camera, CheckCircle, CheckCircle2, Globe, X,
   Link2, MapPin, Loader2, Save, Edit2,
   DollarSign, Zap, Sparkles, Eye, EyeOff, ShieldCheck,
-  Mail, Smartphone
+  Mail, Smartphone, Clock, AlertCircle, Star
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import WalletConnect from "@/components/WalletConnect";
@@ -20,7 +20,6 @@ import TierBadge from "@/components/TierBadge";
 import VerifiedBadge from "@/components/VerifiedBadge";
 import KycModal from "@/components/KycModal";
 import EmailVerificationModal from "@/components/EmailVerificationModal";
-import PhoneVerificationModal from "@/components/PhoneVerificationModal";
 
 const INVESTMENT_FOCUS_OPTIONS = [
   "FinTech","HealthTech","EdTech","AgriTech","DeFi",
@@ -52,6 +51,8 @@ type Profile = {
   wallet_address: string | null;
   wallet_verified: boolean;
   is_anonymous?: boolean;
+  is_scam?: boolean;
+  is_banned?: boolean;
 };
 
 export default function ProfilePage() {
@@ -321,7 +322,7 @@ export default function ProfilePage() {
               <h1 className="text-[#F5F3ED] text-lg font-medium">
                 {profile?.full_name}
               </h1>
-              <VerifiedBadge tier={profile?.subscription_tier} isVerified={profile?.is_verified} size={18} />
+              <VerifiedBadge tier={profile?.subscription_tier} isVerified={profile?.is_verified} isScam={profile?.is_scam} isBanned={profile?.is_banned} size={18} />
             </div>
             <div className="flex items-center gap-2 text-xs text-[#5C5A70]">
               <span>@{profile?.username}</span>
@@ -376,68 +377,74 @@ export default function ProfilePage() {
       }`}
     >
       <div className="flex items-center gap-2">
-        <ShieldCheck size={16} />
+        <ShieldCheck size={16} className={profile?.kyc_status === "approved" ? "text-emerald-400" : profile?.kyc_status === "pending" ? "text-amber-400 animate-pulse" : "text-[#C9A84C]"} />
         <span>
           KYC Documents: {
             profile?.kyc_status === "approved"
-              ? "Verified ✓"
+              ? "Verified"
               : profile?.kyc_status === "pending"
-              ? "Pending Review ⏳"
+              ? "Pending Review"
               : profile?.kyc_status === "rejected"
-              ? "Rejected ❌ (Click to Resubmit)"
-              : "Submit Identity Documents 🛡️"
+              ? "Rejected (Click to Resubmit)"
+              : "Submit Identity Documents"
           }
         </span>
       </div>
-      <span className="text-[10px] uppercase font-bold text-[#C9A84C]">Manage</span>
+      <div className="flex items-center gap-1.5">
+        {profile?.kyc_status === "approved" ? (
+          <span className="flex items-center gap-1 text-[10px] uppercase font-bold text-emerald-400">
+            <CheckCircle2 size={12} className="text-emerald-400" />
+            Verified
+          </span>
+        ) : profile?.kyc_status === "pending" ? (
+          <span className="flex items-center gap-1 text-[10px] uppercase font-bold text-amber-400 animate-pulse">
+            <Clock size={12} className="text-amber-400 animate-spin" />
+            Pending
+          </span>
+        ) : (
+          <span className="text-[10px] uppercase font-bold text-[#C9A84C]">Manage</span>
+        )}
+      </div>
     </button>
 
     {/* Email OTP Verification */}
     <button
       type="button"
-      onClick={() => setShowEmailModal(true)}
-      className={`flex items-center justify-between gap-2 px-4 py-3 rounded-xl text-xs font-semibold border transition cursor-pointer ${
-        (profile as any)?.email_verified
-          ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
-          : "bg-[#1A1A2E] border-[#3A3A52] text-[#A8A6B8] hover:border-[#C9A84C]"
+      onClick={() => {
+        if (!((profile as any)?.email_verified || profile?.is_verified)) {
+          setShowEmailModal(true);
+        }
+      }}
+      disabled={Boolean((profile as any)?.email_verified || profile?.is_verified)}
+      className={`flex items-center justify-between gap-2 px-4 py-3 rounded-xl text-xs font-semibold border transition ${
+        ((profile as any)?.email_verified || profile?.is_verified)
+          ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30 cursor-default"
+          : "bg-[#1A1A2E] border-[#3A3A52] text-[#A8A6B8] hover:border-[#C9A84C] cursor-pointer"
       }`}
     >
       <div className="flex items-center gap-2">
-        <Mail size={16} />
+        <Mail size={16} className={((profile as any)?.email_verified || profile?.is_verified) ? "text-emerald-400" : "text-[#A8A6B8]"} />
         <span>
-          Email: {(profile as any)?.email_verified ? "Verified ✓" : "Verify Email Address 📧"}
+          Email Address
         </span>
       </div>
-      <span className="text-[10px] uppercase font-bold text-[#C9A84C]">
-        {(profile as any)?.email_verified ? "Verified" : "Verify"}
-      </span>
-    </button>
-
-    {/* Phone SMS Verification */}
-    <button
-      type="button"
-      onClick={() => setShowPhoneModal(true)}
-      className={`flex items-center justify-between gap-2 px-4 py-3 rounded-xl text-xs font-semibold border transition cursor-pointer ${
-        (profile as any)?.phone_verified
-          ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
-          : "bg-[#1A1A2E] border-[#3A3A52] text-[#A8A6B8] hover:border-[#C9A84C]"
-      }`}
-    >
-      <div className="flex items-center gap-2">
-        <Smartphone size={16} />
-        <span>
-          Phone: {(profile as any)?.phone_verified ? "Verified ✓" : "Verify Phone Number 📱"}
+      {((profile as any)?.email_verified || profile?.is_verified) ? (
+        <span className="flex items-center gap-1 text-[10px] uppercase font-bold text-emerald-400">
+          <CheckCircle2 size={12} className="text-emerald-400" />
+          Verified
         </span>
-      </div>
-      <span className="text-[10px] uppercase font-bold text-[#C9A84C]">
-        {(profile as any)?.phone_verified ? "Verified" : "Verify"}
-      </span>
+      ) : (
+        <span className="flex items-center gap-1 text-[10px] uppercase font-bold text-amber-400 animate-pulse">
+          <Clock size={12} className="text-amber-400" />
+          Verify Email
+        </span>
+      )}
     </button>
 
     {/* Trust Score */}
     {profile && profile.trust_score > 0 && (
       <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-[#1A1A2E] border border-[#3A3A52] text-[#A8A6B8] text-sm">
-        <span>⭐</span>
+        <Star size={16} className="text-[#C9A84C] fill-current shrink-0" />
         <span className="font-medium text-[#F5F3ED]">{profile.trust_score.toFixed(1)}</span>
         <span className="text-[#5C5A70]">Trust Score</span>
       </div>
@@ -813,14 +820,6 @@ export default function ProfilePage() {
               onClose={() => setShowEmailModal(false)}
               userId={profile.id}
               userEmail={userEmail || profile.id}
-              onSuccess={() => void fetchProfile()}
-            />
-
-            <PhoneVerificationModal
-              isOpen={showPhoneModal}
-              onClose={() => setShowPhoneModal(false)}
-              userId={profile.id}
-              initialPhone={profile.phone || ""}
               onSuccess={() => void fetchProfile()}
             />
           </>

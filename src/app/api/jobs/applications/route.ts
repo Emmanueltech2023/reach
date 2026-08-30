@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
     if (jobId) {
       const { data, error } = await supabase
         .from('job_applications')
-        .select('*, profiles(id, full_name, username, avatar_url, is_verified, subscription_tier, trust_score, bio, country, website, linkedin, twitter, category, investment_focus)')
+        .select('*, profiles(id, full_name, username, avatar_url, is_verified, is_scam, is_banned, subscription_tier, trust_score, bio, country, website, linkedin, twitter, category, investment_focus)')
         .eq('job_id', jobId)
         .order('created_at', { ascending: false });
       if (error) throw error;
@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
 
       const { data, error } = await supabase
         .from('job_applications')
-        .select('*, jobs(*), profiles(id, full_name, username, avatar_url, is_verified, subscription_tier, trust_score, bio, country)')
+        .select('*, jobs(*), profiles(id, full_name, username, avatar_url, is_verified, is_scam, is_banned, subscription_tier, trust_score, bio, country)')
         .in('job_id', jobIds)
         .order('created_at', { ascending: false });
       if (error) throw error;
@@ -125,33 +125,83 @@ export async function PATCH(req: NextRequest) {
         const { data: authUser } = await supabase.auth.admin.getUserById(applicantId);
         const applicantEmail = authUser?.user?.email;
 
-        if (applicantEmail && status.toLowerCase() === 'hired') {
+        if (applicantEmail) {
           const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
           const { sendEmail } = await import('@/lib/email');
-          await sendEmail({
-            to: applicantEmail,
-            subject: `🎉 Congratulations! You have been hired for ${jobTitle}`,
-            html: `
-              <!DOCTYPE html>
-              <html>
-              <body style="font-family: -apple-system, sans-serif; background: #0F0F1A; color: #F5F3ED; padding: 40px 20px; margin: 0;">
-                <div style="max-width: 520px; margin: 0 auto; background: #1A1A2E; border-radius: 16px; padding: 32px; border: 1px solid #3A3A52;">
-                  <h1 style="font-size: 22px; font-weight: 700; color: #F5F3ED; margin: 0 0 6px;">R<span style="color: #C9A84C;">EACH</span></h1>
-                  <p style="color: #C9A84C; font-size: 11px; margin: 0 0 24px; text-transform: uppercase; letter-spacing: 0.5px;">Job Offer Notification</p>
-                  <h2 style="font-size: 20px; font-weight: 700; color: #10B981; margin: 0 0 12px;">🎉 You've Been Hired!</h2>
-                  <p style="color: #A8A6B8; font-size: 14px; line-height: 1.6; margin: 0 0 20px;">
-                    We are thrilled to inform you that <strong style="color: #F5F3ED;">${companyName}</strong> has extended an offer for the <strong style="color: #C9A84C;">${jobTitle}</strong> position.
-                  </p>
-                  <p style="color: #5C5A70; font-size: 13px; margin: 0 0 24px;">Log in to your REACH dashboard to view your application tracker and message your hiring manager directly.</p>
-                  <a href="${appUrl}/dashboard/talent/applications" 
-                     style="display: inline-block; background: #C9A84C; color: #0A0A0F; padding: 12px 24px; border-radius: 10px; text-decoration: none; font-weight: 700; font-size: 14px;">
-                    View My Applications
-                  </a>
-                </div>
-              </body>
-              </html>
-            `
-          });
+
+          if (status.toLowerCase() === 'hired') {
+            await sendEmail({
+              to: applicantEmail,
+              subject: `🎉 Congratulations! You have been hired for ${jobTitle}`,
+              html: `
+                <!DOCTYPE html>
+                <html>
+                <body style="font-family: -apple-system, sans-serif; background: #0F0F1A; color: #F5F3ED; padding: 40px 20px; margin: 0;">
+                  <div style="max-width: 520px; margin: 0 auto; background: #1A1A2E; border-radius: 16px; padding: 32px; border: 1px solid #3A3A52;">
+                    <h1 style="font-size: 22px; font-weight: 700; color: #F5F3ED; margin: 0 0 6px;">R<span style="color: #C9A84C;">EACH</span></h1>
+                    <p style="color: #C9A84C; font-size: 11px; margin: 0 0 24px; text-transform: uppercase; letter-spacing: 0.5px;">Job Offer Notification</p>
+                    <h2 style="font-size: 20px; font-weight: 700; color: #10B981; margin: 0 0 12px;">🎉 You've Been Hired!</h2>
+                    <p style="color: #A8A6B8; font-size: 14px; line-height: 1.6; margin: 0 0 20px;">
+                      We are thrilled to inform you that <strong style="color: #F5F3ED;">${companyName}</strong> has extended an offer for the <strong style="color: #C9A84C;">${jobTitle}</strong> position.
+                    </p>
+                    <p style="color: #5C5A70; font-size: 13px; margin: 0 0 24px;">Log in to your REACH dashboard to view your application tracker and connect with your hiring manager.</p>
+                    <a href="${appUrl}/dashboard/talent/applications" 
+                       style="display: inline-block; background: #C9A84C; color: #0A0A0F; padding: 12px 24px; border-radius: 10px; text-decoration: none; font-weight: 700; font-size: 14px;">
+                      View My Applications
+                    </a>
+                  </div>
+                </body>
+                </html>
+              `
+            }).catch((e) => console.warn('Email dispatch warning:', e));
+          } else if (status.toLowerCase() === 'shortlisted') {
+            await sendEmail({
+              to: applicantEmail,
+              subject: `⭐ Great news! Your application for ${jobTitle} was Shortlisted`,
+              html: `
+                <!DOCTYPE html>
+                <html>
+                <body style="font-family: -apple-system, sans-serif; background: #0F0F1A; color: #F5F3ED; padding: 40px 20px; margin: 0;">
+                  <div style="max-width: 520px; margin: 0 auto; background: #1A1A2E; border-radius: 16px; padding: 32px; border: 1px solid #3A3A52;">
+                    <h1 style="font-size: 22px; font-weight: 700; color: #F5F3ED; margin: 0 0 6px;">R<span style="color: #C9A84C;">EACH</span></h1>
+                    <p style="color: #C9A84C; font-size: 11px; margin: 0 0 24px; text-transform: uppercase; letter-spacing: 0.5px;">Application Shortlisted</p>
+                    <h2 style="font-size: 18px; font-weight: 700; color: #C9A84C; margin: 0 0 12px;">⭐ You've Been Shortlisted!</h2>
+                    <p style="color: #A8A6B8; font-size: 14px; line-height: 1.6; margin: 0 0 20px;">
+                      Great news! The hiring manager at <strong style="color: #F5F3ED;">${companyName}</strong> has shortlisted your profile for <strong style="color: #C9A84C;">${jobTitle}</strong>.
+                    </p>
+                    <a href="${appUrl}/dashboard/talent/applications" 
+                       style="display: inline-block; background: #C9A84C; color: #0A0A0F; padding: 12px 24px; border-radius: 10px; text-decoration: none; font-weight: 700; font-size: 14px;">
+                      View Status
+                    </a>
+                  </div>
+                </body>
+                </html>
+              `
+            }).catch((e) => console.warn('Email dispatch warning:', e));
+          } else if (status.toLowerCase() === 'rejected') {
+            await sendEmail({
+              to: applicantEmail,
+              subject: `Application Update: ${jobTitle} at ${companyName}`,
+              html: `
+                <!DOCTYPE html>
+                <html>
+                <body style="font-family: -apple-system, sans-serif; background: #0F0F1A; color: #F5F3ED; padding: 40px 20px; margin: 0;">
+                  <div style="max-width: 520px; margin: 0 auto; background: #1A1A2E; border-radius: 16px; padding: 32px; border: 1px solid #3A3A52;">
+                    <h1 style="font-size: 22px; font-weight: 700; color: #F5F3ED; margin: 0 0 6px;">R<span style="color: #C9A84C;">EACH</span></h1>
+                    <p style="color: #5C5A70; font-size: 11px; margin: 0 0 24px; text-transform: uppercase; letter-spacing: 0.5px;">Application Status Update</p>
+                    <p style="color: #A8A6B8; font-size: 14px; line-height: 1.6; margin: 0 0 20px;">
+                      Thank you for applying for <strong style="color: #F5F3ED;">${jobTitle}</strong> at <strong style="color: #F5F3ED;">${companyName}</strong>. The hiring team has completed reviewing candidates for this position.
+                    </p>
+                    <a href="${appUrl}/dashboard/talent" 
+                       style="display: inline-block; background: #2A2A3E; color: #F5F3ED; padding: 12px 24px; border-radius: 10px; text-decoration: none; font-weight: 600; font-size: 14px;">
+                      Explore More Jobs
+                    </a>
+                  </div>
+                </body>
+                </html>
+              `
+            }).catch((e) => console.warn('Email dispatch warning:', e));
+          }
         }
       }
     } catch (notifErr) {

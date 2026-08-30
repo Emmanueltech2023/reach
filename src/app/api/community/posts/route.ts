@@ -12,7 +12,7 @@ export async function GET() {
       .from("community_posts")
       .select(`
         *,
-        profiles(id, full_name, username, is_verified, avatar_url, subscription_tier)
+        profiles(id, full_name, username, is_verified, is_scam, is_banned, avatar_url, subscription_tier)
       `)
       .order("id", { ascending: false });
 

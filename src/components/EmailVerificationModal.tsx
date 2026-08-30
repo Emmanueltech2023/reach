@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { X, Mail, Loader2, CheckCircle, AlertCircle, KeyRound } from "lucide-react";
+import { X, Mail, Loader2, CheckCircle, AlertCircle } from "lucide-react";
 
 type EmailModalProps = {
   isOpen: boolean;
@@ -16,7 +16,6 @@ export default function EmailVerificationModal({ isOpen, onClose, userId, userEm
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [sandboxCode, setSandboxCode] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
@@ -33,10 +32,6 @@ export default function EmailVerificationModal({ isOpen, onClose, userId, userEm
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to send email verification code");
 
-      if (data.debugCode) {
-        setSandboxCode(data.debugCode);
-      }
-
       setStep("verify");
     } catch (err: any) {
       setErrorMsg(err.message || "Failed to dispatch email verification");
@@ -45,12 +40,8 @@ export default function EmailVerificationModal({ isOpen, onClose, userId, userEm
     }
   };
 
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!code || code.length < 6) {
-      setErrorMsg("Please enter 6-digit confirmation code");
-      return;
-    }
+  const submitVerification = async (codeToVerify: string) => {
+    if (!codeToVerify || codeToVerify.length < 6) return;
 
     setLoading(true);
     setErrorMsg(null);
@@ -59,7 +50,7 @@ export default function EmailVerificationModal({ isOpen, onClose, userId, userEm
       const res = await fetch("/api/verify/email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "verify_otp", userId, code }),
+        body: JSON.stringify({ action: "verify_otp", userId, code: codeToVerify }),
       });
 
       const data = await res.json();
@@ -71,6 +62,19 @@ export default function EmailVerificationModal({ isOpen, onClose, userId, userEm
       setErrorMsg(err.message || "Verification failed");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await submitVerification(code);
+  };
+
+  const handleCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value.trim();
+    setCode(val);
+    if (val.length === 6 && !loading) {
+      void submitVerification(val);
     }
   };
 
@@ -90,7 +94,7 @@ export default function EmailVerificationModal({ isOpen, onClose, userId, userEm
             </div>
           </div>
 
-          <button onClick={onClose} className="p-2 rounded-xl bg-[#0F0F1A] border border-[#3A3A52] text-[#A8A6B8] hover:text-white">
+          <button onClick={onClose} className="p-2 rounded-xl bg-[#0F0F1A] border border-[#3A3A52] text-[#A8A6B8] hover:text-white cursor-pointer">
             <X size={16} />
           </button>
         </div>
@@ -102,16 +106,10 @@ export default function EmailVerificationModal({ isOpen, onClose, userId, userEm
           </div>
         )}
 
-        {sandboxCode && (
-          <div className="p-3 rounded-xl bg-[#C9A84C]/10 border border-[#C9A84C]/30 text-xs text-[#C9A84C]">
-            💡 Sandbox Test OTP Code: <strong className="font-mono text-white tracking-widest">{sandboxCode}</strong>
-          </div>
-        )}
-
         {step === "request" ? (
           <div className="space-y-4">
             <p className="text-xs text-[#A8A6B8] leading-relaxed">
-              We will send a 6-digit confirmation code to your email address <strong className="text-white">{userEmail}</strong> using Resend API.
+              We will send a 6-digit confirmation code to your email address <strong className="text-white">{userEmail}</strong>.
             </p>
 
             <button
@@ -119,19 +117,20 @@ export default function EmailVerificationModal({ isOpen, onClose, userId, userEm
               disabled={loading}
               className="w-full py-3.5 rounded-xl bg-[#C9A84C] hover:opacity-90 text-[#0A0A0F] font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer disabled:opacity-50"
             >
-              {loading ? <Loader2 size={16} className="animate-spin" /> : <><Mail size={16} /> Send Email OTP Code</>}
+              {loading ? <Loader2 size={16} className="animate-spin" /> : <><Mail size={16} /> Send Email Verification Code</>}
             </button>
           </div>
         ) : (
           <form onSubmit={handleVerifyOtp} className="space-y-4">
             <div>
-              <label className="text-xs font-semibold text-[#A8A6B8] mb-1.5 block">Enter 6-Digit Email Code</label>
+              <label className="text-xs font-semibold text-[#A8A6B8] mb-1.5 block">Enter 6-Digit Confirmation Code</label>
               <input
                 type="text"
                 maxLength={6}
                 required
+                autoFocus
                 value={code}
-                onChange={(e) => setCode(e.target.value)}
+                onChange={handleCodeChange}
                 placeholder="123456"
                 className="w-full bg-[#0F0F1A] border border-[#3A3A52] text-center font-mono text-2xl tracking-[8px] text-[#C9A84C] rounded-xl py-3 outline-none focus:border-[#C9A84C]"
               />
@@ -148,7 +147,7 @@ export default function EmailVerificationModal({ isOpen, onClose, userId, userEm
             <button
               type="button"
               onClick={handleSendOtp}
-              className="w-full text-center text-xs text-[#5C5A70] hover:text-[#A8A6B8] transition"
+              className="w-full text-center text-xs text-[#5C5A70] hover:text-[#A8A6B8] transition cursor-pointer"
             >
               Didn't receive code? Resend
             </button>

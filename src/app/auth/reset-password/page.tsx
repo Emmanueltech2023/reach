@@ -42,7 +42,8 @@ export default function ResetPasswordPage() {
     <main className="min-h-screen flex flex-col items-center justify-center bg-[#0F0F1A] px-6 py-12">
       <div className="w-full max-w-sm">
 
-        <div className="text-center mb-8">
+        <div className="text-center mb-8 flex flex-col items-center">
+          <img src="/logo-icon.png" alt="REACH" className="w-12 h-12 rounded-xl mb-3 shadow-lg shadow-black/50" />
           <h1 className="text-2xl font-bold tracking-wider text-[#F5F3ED] mb-1">
             R<span className="text-[#C9A84C]">EACH</span>
           </h1>

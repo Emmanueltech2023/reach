@@ -34,6 +34,8 @@ type Post = {
     avatar_url: string | null;
     subscription_tier: string;
     role?: string;
+    is_scam?: boolean;
+    is_banned?: boolean;
   } | null;
 };
 
@@ -926,7 +928,7 @@ export default function CommunityPage() {
                                 {post.is_anonymous ? "Anonymous" : post.profiles?.full_name || "Community Member"}
                               </span>
                               {!post.is_anonymous && (
-                                <VerifiedBadge tier={post.profiles?.subscription_tier} isVerified={post.profiles?.is_verified} size={13} />
+                                <VerifiedBadge tier={post.profiles?.subscription_tier} isVerified={post.profiles?.is_verified} isScam={post.profiles?.is_scam} isBanned={post.profiles?.is_banned} size={13} />
                               )}
                               {!post.is_anonymous && post.profiles?.role && (
                                 <span className="text-[9px] sm:text-[10px] px-1.5 py-0.2 rounded-md bg-[#2A2A3E] text-[#A8A6B8] border border-[#3A3A52] capitalize">

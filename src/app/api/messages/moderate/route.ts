@@ -2,23 +2,25 @@ import { NextRequest, NextResponse } from "next/server";
 
 // Patterns that indicate attempts to move off-platform
 const CONTACT_PATTERNS = [
-  // Phone numbers
+  // Phone numbers (e.g. +1234567890, 08012345678, 123-456-7890)
   /(\+?[\d\s\-\(\)]{10,15})/g,
   // Email addresses
   /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g,
-  // WhatsApp mentions
-  /whatsapp/gi,
-  // Telegram
-  /telegram|t\.me\//gi,
-  // Instagram
-  /instagram|@[a-zA-Z0-9_.]+/gi,
+  // Social & messaging platforms
+  /whatsapp|telegram|t\.me\/|instagram|insta|wechat|signal|skype|linkedin/gi,
+  // Handles (@name, ig: name, etc.)
+  /@\w+/gi,
   // "DM me", "message me", "contact me" + platform
-  /(dm|message|contact|reach|hit)\s*(me|us)\s*(on|at|via|through)\s*(whatsapp|telegram|instagram|twitter|email)/gi,
-  // Direct contact requests
-  /let('s)?\s*(talk|speak|chat|connect)\s*(off|outside|privately|direct)/gi,
-  /take\s*(this|our\s*conversation)\s*(off|outside|elsewhere)/gi,
-  /my\s*(number|phone|email|handle|ig|insta)/gi,
-  /send\s*(me|us)\s*(your|a)\s*(number|email|contact)/gi,
+  /(dm|message|contact|reach|hit|text|call)\s*(me|us|you)\s*(on|at|via|through|with)?\s*(whatsapp|telegram|instagram|twitter|email|phone|number|digits)?/gi,
+  // Asking for or offering contact info / details (e.g. "can I get your contact", "what is your number", "share your email")
+  /(can|could|may|would|should|how|where|please)\s*(i|we|you)?\s*(get|have|share|send|ask|find|take|swap|drop|give)\s*(your|a|my|our)?\s*(contact|number|email|phone|whatsapp|telegram|ig|instagram|digits|address|details|info)/gi,
+  /(give|send|share|drop|leave|swap|text|call|ping|reach)\s*(me|us|you)?\s*(your|a|my|our)?\s*(contact|number|email|phone|whatsapp|telegram|ig|instagram|digits|address|details|info)/gi,
+  /(what|what's|whats)\s*(is|are)?\s*(your|a)?\s*(contact|number|email|phone|whatsapp|telegram|digits|info|details)/gi,
+  // Off-platform intent
+  /let('s)?\s*(talk|speak|chat|connect|meet|deal)\s*(off|outside|privately|direct|elsewhere)/gi,
+  /take\s*(this|our\s*conversation|deal)\s*(off|outside|elsewhere)/gi,
+  /my\s*(number|phone|email|handle|ig|insta|whatsapp|contact)/gi,
+  /contact\s*(info|details|number|email|phone)/gi,
 ];
 
 const WARNING_PATTERNS = [

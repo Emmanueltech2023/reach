@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { sendEmail, emailTemplates } from "@/lib/email";
 import { getUserTier, getTierRules } from "@/lib/tierCheck";
 import { moderateContent } from "./moderate/route";
+import { handleConciergeQuery } from "@/lib/conciergeBot";
+import { checkRateLimit } from "@/lib/rateLimit";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -59,6 +61,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: "Missing required fields" },
         { status: 400 }
+      );
+    }
+
+    // Rate Limiting Protection (Max 30 messages per minute per user)
+    const limit = checkRateLimit(`msg-limit:${senderId}`, 30, 60 * 1000);
+    if (!limit.success) {
+      return NextResponse.json(
+        { error: `You are sending messages too quickly. Please wait ${limit.reset} seconds.` },
+        { status: 429 }
       );
     }
 
@@ -172,26 +183,35 @@ export async function POST(req: NextRequest) {
         const senderName = senderProfile?.full_name || "Someone";
         const preview = content ? (content.slice(0, 100) + (content.length > 100 ? "…" : "")) : "Sent an attachment";
 
-        // Create in-app notification for recipient
-        await supabase.from("notifications").insert({
-          user_id: recipientId,
-          title: `New message from ${senderName}`,
-          body: preview,
-          type: "message",
-          action_url: `/dashboard/chats?conversationId=${conversationId}`,
-        });
+        // Check if recipient is concierge/admin and respond automatically
+        const { data: recipientRole } = await supabase
+          .from("profiles")
+          .select("role, id")
+          .eq("id", recipientId)
+          .maybeSingle();
 
-        // Send email notification
-        if (authUser?.user?.email) {
-          sendEmail({
-            to: authUser.user.email,
-            subject: `New message from ${senderName} — REACH`,
-            html: emailTemplates.newMessage(
-              recipientProfile?.full_name || "User",
-              senderName,
-              preview
-            ),
-          }).catch((err) => console.error("Failed to send notification email:", err));
+        if (recipientRole?.role === "admin" && content) {
+          const conciergeReply = handleConciergeQuery(content);
+          
+          // Auto-insert Concierge reply after 800ms delay
+          setTimeout(async () => {
+            try {
+              await supabase.from("messages").insert({
+                conversation_id: conversationId,
+                sender_id: recipientId,
+                content: conciergeReply.reply,
+                message_type: "text",
+                delivery_status: "sent",
+              });
+
+              await supabase.from("conversations").update({
+                last_message_content: conciergeReply.reply,
+                last_message_at: new Date().toISOString(),
+              }).eq("id", conversationId);
+            } catch (conciergeErr) {
+              console.warn("Concierge response notice:", conciergeErr);
+            }
+          }, 800);
         }
       }
     }

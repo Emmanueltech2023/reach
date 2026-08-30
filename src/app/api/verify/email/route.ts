@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { sendEmail } from "@/lib/email";
+import { checkRateLimit } from "@/lib/rateLimit";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -9,6 +10,16 @@ const supabase = createClient(
 
 export async function POST(req: NextRequest) {
   try {
+    // Enforce Rate Limiting (Max 5 OTP requests per minute per IP)
+    const clientIp = req.headers.get("x-forwarded-for") || "client-ip";
+    const limit = checkRateLimit(`email-otp:${clientIp}`, 5, 60 * 1000);
+    if (!limit.success) {
+      return NextResponse.json(
+        { error: `Too many verification requests. Please wait ${limit.reset} seconds before trying again.` },
+        { status: 429 }
+      );
+    }
+
     const { action, userId, email, code } = await req.json();
 
     if (!action || !userId) {
@@ -17,8 +28,22 @@ export async function POST(req: NextRequest) {
 
     // ACTION 1: SEND EMAIL OTP
     if (action === "send_otp") {
-      if (!email) {
-        return NextResponse.json({ error: "Missing target email address" }, { status: 400 });
+      let targetEmail = (email || "").trim();
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      
+      if (!targetEmail || !emailRegex.test(targetEmail)) {
+        try {
+          const { data: authUser } = await supabase.auth.admin.getUserById(userId);
+          if (authUser?.user?.email) {
+            targetEmail = authUser.user.email;
+          }
+        } catch (authFetchErr) {
+          console.warn("Auth user email fetch fallback warning:", authFetchErr);
+        }
+      }
+
+      if (!targetEmail || !emailRegex.test(targetEmail)) {
+        return NextResponse.json({ error: "Please provide a valid email address." }, { status: 400 });
       }
 
       // Generate 6-digit OTP code
@@ -29,7 +54,7 @@ export async function POST(req: NextRequest) {
       await supabase.from("verification_codes").insert({
         user_id: userId,
         channel: "email",
-        target: email,
+        target: targetEmail,
         code: generatedCode,
         expires_at: expiresAt,
       });
@@ -52,7 +77,7 @@ export async function POST(req: NextRequest) {
       // Send via Resend API
       try {
         await sendEmail({
-          to: email,
+          to: targetEmail,
           subject: `Your REACH Email Verification Code: ${generatedCode}`,
           html: htmlContent,
         });
@@ -62,38 +87,44 @@ export async function POST(req: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        message: `Verification code sent to ${email}`,
-        // In local development/test mode, provide preview code for instant test
-        debugCode: process.env.NODE_ENV !== "production" ? generatedCode : undefined,
+        message: `Verification code sent to ${targetEmail}`,
       });
     }
 
     // ACTION 2: VERIFY EMAIL OTP
     if (action === "verify_otp") {
-      if (!code) {
-        return NextResponse.json({ error: "Missing verification code" }, { status: 400 });
+      const cleanCode = String(code || "").trim();
+      if (!cleanCode) {
+        return NextResponse.json({ error: "Please enter your 6-digit verification code." }, { status: 400 });
       }
 
-      // Check code in database
+      // Fetch the latest verification code for this user
       const { data: record, error: checkErr } = await supabase
         .from("verification_codes")
         .select("*")
         .eq("user_id", userId)
         .eq("channel", "email")
-        .eq("code", code)
-        .gt("expires_at", new Date().toISOString())
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
 
       if (checkErr || !record) {
-        return NextResponse.json({ error: "Invalid or expired verification code" }, { status: 400 });
+        return NextResponse.json({ error: "No verification code requested. Please click 'Send Code' first." }, { status: 400 });
+      }
+
+      if (record.code !== cleanCode) {
+        return NextResponse.json({ error: "Incorrect verification code. Please check your email and try again." }, { status: 400 });
+      }
+
+      const isExpired = new Date(record.expires_at).getTime() < Date.now();
+      if (isExpired) {
+        return NextResponse.json({ error: "Verification code has expired. Please click 'Resend Code'." }, { status: 400 });
       }
 
       // Update profile
       await supabase
         .from("profiles")
-        .update({ email_verified: true })
+        .update({ email_verified: true, is_verified: true })
         .eq("id", userId);
 
       // Clean up used code

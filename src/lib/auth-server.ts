@@ -42,9 +42,13 @@ export async function getAuthenticatedUser(req?: NextRequest): Promise<AuthResul
 
     // If Bearer token is provided, verify directly with Supabase JWT using anonAuthClient
     if (token) {
-      const { data, error } = await anonAuthClient.auth.getUser(token);
-      if (!error && data?.user) {
-        user = data.user;
+      try {
+        const { data, error } = await anonAuthClient.auth.getUser(token);
+        if (!error && data?.user) {
+          user = data.user;
+        }
+      } catch (tokenAuthErr) {
+        console.warn("[Auth Server] Token verification notice:", tokenAuthErr);
       }
     }
 
