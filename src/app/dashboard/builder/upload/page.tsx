@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Loader2, Star, Camera, Upload, FileText } from "lucide-react";
+import { ArrowLeft, Loader2, Star, Camera, Upload, FileText, Building2, Globe } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 const SECTORS = [
@@ -48,6 +48,9 @@ export default function UploadProjectPage() {
     twitter: "",
     stage: "idea",
     tier: "free",
+    hasOffice: "no",
+    officeAddress: "",
+    teamSize: "",
   });
 
   const handleChange = (
@@ -116,6 +119,9 @@ export default function UploadProjectPage() {
           tier: form.tier,
           logoUrl,
           bannerUrl,
+          hasPhysicalOffice: form.hasOffice === "yes",
+          officeAddress: form.hasOffice === "yes" ? form.officeAddress : null,
+          teamSize: form.teamSize,
         }),
       });
 
@@ -158,55 +164,121 @@ export default function UploadProjectPage() {
           </div>
         </div>
 
-        {/* Banner upload */}
-        <div
-          className="relative w-full h-40 bg-[#1A1A2E] cursor-pointer overflow-hidden"
-          onClick={() => bannerRef.current?.click()}
-        >
-          {bannerPreview ? (
-            <Image
-              src={bannerPreview}
-              alt="Banner"
-              fill
-              unoptimized
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <div className="w-full h-full flex flex-col items-center justify-center gap-2">
-              <Upload size={22} className="text-[#3A3A52]" />
-              <span className="text-[#5C5A70] text-xs">Click to upload banner image</span>
+        {/* Project Media Card */}
+        <div className="px-4 pt-4 pb-2">
+          <div className="bg-[#141422] border border-[#3A3A52] rounded-2xl p-4 sm:p-5 flex flex-col gap-4 shadow-xl shadow-black/30">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-semibold text-[#F5F3ED]">Project Media & Branding</h3>
+                <p className="text-[#8E8CA0] text-xs">Upload your project banner and square logo</p>
+              </div>
+              <span className="text-[10px] text-[#C9A84C] font-semibold bg-[#C9A84C]/10 border border-[#C9A84C]/30 px-2 py-0.5 rounded-full">
+                Visual Assets
+              </span>
             </div>
-          )}
-          <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 hover:opacity-100 transition">
-            <Camera size={20} className="text-white" />
-          </div>
-          <input ref={bannerRef} type="file" accept="image/*" className="hidden"
-            onChange={(e) => handleImageSelect(e, "banner")} />
-        </div>
 
-        {/* Logo upload */}
-        <div className="px-4 -mt-8 mb-6 flex items-end gap-4">
-          <div
-            className="w-16 h-16 rounded-xl bg-[#1A1A2E] border-2 border-[#0F0F1A] flex items-center justify-center cursor-pointer overflow-hidden shrink-0"
-            onClick={() => logoRef.current?.click()}
-          >
-            {logoPreview ? (
-              <Image
-                src={logoPreview}
-                alt="Logo"
-                fill
-                unoptimized
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <Camera size={20} className="text-[#3A3A52]" />
-            )}
-            <input ref={logoRef} type="file" accept="image/*" className="hidden"
-              onChange={(e) => handleImageSelect(e, "logo")} />
-          </div>
-          <div className="pt-2">
-            <p className="text-[#F5F3ED] text-sm font-medium">Project media</p>
-            <p className="text-[#5C5A70] text-xs">Banner (above) · Logo (left)</p>
+            {/* Banner Preview / Upload Container */}
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-[#A8A6B8] font-medium">Project Cover Banner</span>
+                <span className="text-[#5C5A70] text-[11px]">Recommended 1200 × 400</span>
+              </div>
+              <div
+                onClick={() => bannerRef.current?.click()}
+                className="relative w-full h-36 sm:h-40 rounded-xl bg-[#0F0F1A] border-2 border-dashed border-[#3A3A52] hover:border-[#C9A84C] transition cursor-pointer overflow-hidden group"
+              >
+                {bannerPreview ? (
+                  <>
+                    <Image
+                      src={bannerPreview}
+                      alt="Banner"
+                      fill
+                      unoptimized
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-2 text-xs text-white font-medium">
+                      <Camera size={16} />
+                      <span>Change Banner</span>
+                    </div>
+                  </>
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center gap-2 p-4 text-center">
+                    <div className="w-10 h-10 rounded-full bg-[#1A1A2E] border border-[#3A3A52] flex items-center justify-center text-[#A8A6B8] group-hover:text-[#C9A84C] group-hover:border-[#C9A84C]/50 transition">
+                      <Upload size={18} />
+                    </div>
+                    <div className="text-xs text-[#A8A6B8]">
+                      <span className="text-[#C9A84C] font-medium">Click to upload banner</span> or drag and drop
+                    </div>
+                    <span className="text-[#5C5A70] text-[10px]">PNG, JPG or WEBP up to 5MB</span>
+                  </div>
+                )}
+                <input
+                  ref={bannerRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => handleImageSelect(e, "banner")}
+                />
+              </div>
+            </div>
+
+            {/* Logo Upload Row */}
+            <div className="flex items-center gap-4 pt-1">
+              <div
+                onClick={() => logoRef.current?.click()}
+                className="relative w-20 h-20 rounded-2xl bg-[#0F0F1A] border-2 border-dashed border-[#3A3A52] hover:border-[#C9A84C] flex items-center justify-center cursor-pointer overflow-hidden shrink-0 group transition shadow-lg"
+              >
+                {logoPreview ? (
+                  <>
+                    <Image
+                      src={logoPreview}
+                      alt="Logo"
+                      fill
+                      unoptimized
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-white">
+                      <Camera size={16} />
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex flex-col items-center justify-center gap-1 text-[#5C5A70] group-hover:text-[#C9A84C] transition">
+                    <Upload size={18} />
+                    <span className="text-[10px] font-medium">Logo</span>
+                  </div>
+                )}
+                <input
+                  ref={logoRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => handleImageSelect(e, "logo")}
+                />
+              </div>
+
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-xs font-semibold text-[#F5F3ED]">Project Square Logo</span>
+                  {logoPreview && (
+                    <span className="text-[10px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-1.5 py-0.2 rounded font-medium">
+                      Loaded
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-[#8E8CA0] leading-relaxed">
+                  Square icon (1:1 ratio) used on deal cards and investor listings.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => logoRef.current?.click()}
+                  className="mt-1.5 text-xs text-[#C9A84C] hover:underline font-medium flex items-center gap-1 cursor-pointer"
+                >
+                  <Upload size={12} />
+                  <span>{logoPreview ? "Replace Logo" : "Upload Square Logo"}</span>
+                </button>
+              </div>
+            </div>
+
           </div>
         </div>
 
@@ -359,14 +431,89 @@ export default function UploadProjectPage() {
               </div>
             </div>
 
+            {/* Live Office & Physical Address */}
+            <div className="bg-[#141422] border border-[#3A3A52] rounded-xl p-4 flex flex-col gap-3">
+              <div>
+                <label className="text-[#F5F3ED] text-xs font-semibold mb-1 block">
+                  Do you have a live / physical office? *
+                </label>
+                <p className="text-[#5C5A70] text-[11px] mb-2">
+                  Helps institutional investors verify your operational footprint.
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, hasOffice: "yes" })}
+                    className={`py-2.5 px-3 rounded-lg border flex items-center justify-center gap-1.5 text-xs font-medium transition cursor-pointer ${
+                      form.hasOffice === "yes"
+                        ? "border-[#C9A84C] bg-[#C9A84C]/15 text-[#C9A84C]"
+                        : "border-[#3A3A52] text-[#A8A6B8] hover:border-[#5C5A70]"
+                    }`}
+                  >
+                    <Building2 size={14} className="shrink-0" />
+                    <span>Yes, Live Office</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, hasOffice: "no", officeAddress: "" })}
+                    className={`py-2.5 px-3 rounded-lg border flex items-center justify-center gap-1.5 text-xs font-medium transition cursor-pointer ${
+                      form.hasOffice === "no"
+                        ? "border-[#C9A84C] bg-[#C9A84C]/15 text-[#C9A84C]"
+                        : "border-[#3A3A52] text-[#A8A6B8] hover:border-[#5C5A70]"
+                    }`}
+                  >
+                    <Globe size={14} className="shrink-0" />
+                    <span>No (Fully Remote)</span>
+                  </button>
+                </div>
+              </div>
+
+              {form.hasOffice === "yes" && (
+                <div className="animate-in fade-in duration-200">
+                  <label className="text-[#A8A6B8] text-xs mb-1.5 block">
+                    Office Physical Address *
+                  </label>
+                  <input
+                    name="officeAddress"
+                    required={form.hasOffice === "yes"}
+                    value={form.officeAddress}
+                    onChange={handleChange}
+                    placeholder="e.g. Suite 402, Silicon Hub, 14 Marina Road, Lagos"
+                    className="w-full bg-[#0F0F1A] border border-[#3A3A52] text-[#F5F3ED] text-sm rounded-lg px-4 py-3 outline-none focus:border-[#C9A84C] transition placeholder-[#5C5A70]"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Team Size / Staff Count */}
+            <div>
+              <label className="text-[#A8A6B8] text-xs mb-1.5 block">
+                How many staff / team members work in your company? *
+              </label>
+              <select
+                name="teamSize"
+                required
+                value={form.teamSize}
+                onChange={handleChange}
+                className="w-full bg-[#1A1A2E] border border-[#3A3A52] text-[#F5F3ED] text-sm rounded-lg px-4 py-3 outline-none focus:border-[#C9A84C] transition"
+              >
+                <option value="">Select company staff count</option>
+                <option value="1-5">1 – 5 employees (Early team)</option>
+                <option value="6-15">6 – 15 employees (Growing squad)</option>
+                <option value="16-50">16 – 50 employees (Scaling operation)</option>
+                <option value="51-100">51 – 100 employees (Established company)</option>
+                <option value="100+">100+ employees (Enterprise)</option>
+              </select>
+            </div>
+
             {/* Tier */}
             <div>
               <label className="text-[#A8A6B8] text-xs mb-1.5 block">Listing Tier</label>
               <div className="grid grid-cols-3 gap-2">
                 {[
                   { id: "free", label: "Free", description: "Standard placement", price: "$0" },
-                  { id: "pro", label: "Pro", description: "Badge + more visibility", price: "$29/mo" },
-                  { id: "premium", label: "Premium", description: "Pinned at top of feed", price: "$79/mo" },
+                  { id: "pro", label: "Pro", description: "Badge + more visibility", price: "$15/mo" },
+                  { id: "premium", label: "Premium", description: "Pinned at top of feed", price: "$25/mo" },
                 ].map((t) => (
                   <button key={t.id} type="button"
                     onClick={() => {
@@ -432,7 +579,7 @@ export default function UploadProjectPage() {
               onClick={() => router.push("/dashboard/upgrade")}
               className="w-full bg-[#C9A84C] text-[#1A1A2E] font-medium text-sm py-3 rounded-lg hover:opacity-90 transition mb-2"
             >
-              Upgrade — {selectedTierInfo === "pro" ? "$29/mo" : "$79/mo"}
+              Upgrade — {selectedTierInfo === "pro" ? "$15/mo" : "$25/mo"}
             </button>
             <button
               onClick={() => { setShowUpgradePrompt(false); setForm({ ...form, tier: "free" }); }}

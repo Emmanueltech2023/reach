@@ -269,12 +269,12 @@ export default function DashboardShell({
               const convoIds = userConvos.map((c: any) => c.conversation_id);
               const { data: unreadRows } = await supabase
                 .from("messages")
-                .select("id, delivery_status, is_read")
+                .select("id, delivery_status")
                 .in("conversation_id", convoIds)
                 .neq("sender_id", user.id);
 
               const unreadTotal = (unreadRows || []).filter(
-                (m: any) => m.delivery_status !== "read" && m.is_read !== true
+                (m: any) => m.delivery_status !== "read"
               ).length;
 
               setMsgCount(unreadTotal);
@@ -324,20 +324,39 @@ export default function DashboardShell({
 
         // Listen for instant in-app events
         const handleRefresh = () => {
+          if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
           fetchMsgCount();
           fetchCount();
         };
 
+        // When user switches back to this tab, refresh counts immediately
+        const handleVisibilityChange = () => {
+          if (typeof document !== "undefined" && document.visibilityState === "visible") {
+            fetchMsgCount();
+            fetchCount();
+          }
+        };
+
         window.addEventListener("messages-read", handleRefresh);
         window.addEventListener("unread-count-updated", handleRefresh);
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+        window.addEventListener("focus", handleVisibilityChange);
 
-        // Proactive 5-second polling for live counts across active sessions
+        // Smart tab visibility polling: pause when backgrounded/minimized, poll when active
         const pollInterval = setInterval(() => {
-          fetchMsgCount();
-          fetchCount();
-        }, 5000);
+          if (typeof document !== "undefined" && document.visibilityState === "visible") {
+            fetchMsgCount();
+            fetchCount();
+          }
+        }, 15000);
 
         (window as any)._msgPollInterval = pollInterval;
+        (window as any)._dashboardCleanups = () => {
+          window.removeEventListener("messages-read", handleRefresh);
+          window.removeEventListener("unread-count-updated", handleRefresh);
+          document.removeEventListener("visibilitychange", handleVisibilityChange);
+          window.removeEventListener("focus", handleVisibilityChange);
+        };
 
       } catch (err) {
         console.error("Dashboard shell bootstrap profile/count resolution notice:", err);
@@ -352,6 +371,9 @@ export default function DashboardShell({
       }
       if ((window as any)._msgPollInterval) {
         clearInterval((window as any)._msgPollInterval);
+      }
+      if ((window as any)._dashboardCleanups) {
+        (window as any)._dashboardCleanups();
       }
     };
   }, [supabase, unreadNotificationCount, unreadMessageCount]);

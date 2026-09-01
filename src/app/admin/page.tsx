@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import {
   Users, ShieldCheck, TrendingUp, DollarSign, CheckCircle,
   X, Loader2, BarChart2, CreditCard, Clock, Search,
@@ -937,7 +938,6 @@ export default function AdminPage() {
     { id: "referrals", label: `Referral Network`, icon: Share2 },
     { id: "broadcast", label: "Broadcast Center", icon: Megaphone },
     { id: "audit", label: "Audit Vault 🕵️", icon: ShieldAlert },
-    { id: "docs", label: "System Architecture", icon: Settings },
   ];
 
   if (loading) {
@@ -956,8 +956,15 @@ export default function AdminPage() {
           <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-48 h-48 bg-[#C9A84C]/10 rounded-full blur-3xl pointer-events-none" />
 
           <div className="text-center space-y-2">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#C9A84C] to-[#997828] text-[#0A0A0F] font-black text-2xl flex items-center justify-center mx-auto shadow-lg shadow-[#C9A84C]/20">
-              R
+            <div className="relative w-14 h-14 rounded-2xl bg-[#1A1A2E] border border-[#C9A84C]/40 flex items-center justify-center mx-auto shadow-lg shadow-[#C9A84C]/20 overflow-hidden">
+              <Image
+                src="/logo-icon.png"
+                alt="REACH Logo"
+                width={56}
+                height={56}
+                className="w-full h-full object-contain p-2"
+                priority
+              />
             </div>
             <h1 className="text-xl sm:text-2xl font-bold text-[#F5F3ED] tracking-tight pt-2">
               REACH Admin Portal
@@ -1050,8 +1057,15 @@ export default function AdminPage() {
       <header className="border-b border-[#3A3A52]/80 bg-[#0F0F1A] px-6 py-3.5 flex items-center justify-between sticky top-0 z-30 shadow-md">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#C9A84C] to-[#997828] flex items-center justify-center text-[#0A0A0F] font-black text-sm shadow-md">
-              R
+            <div className="relative w-8 h-8 rounded-lg overflow-hidden shrink-0 flex items-center justify-center bg-[#1A1A2E] border border-[#3A3A52]">
+              <Image
+                src="/logo-icon.png"
+                alt="REACH Logo"
+                width={32}
+                height={32}
+                className="w-full h-full object-contain p-0.5"
+                priority
+              />
             </div>
             <div>
               <h1 className="text-base font-bold tracking-tight text-[#F5F3ED] flex items-center gap-2">
@@ -1062,8 +1076,6 @@ export default function AdminPage() {
               </h1>
               <div className="flex items-center gap-3 text-[11px] text-[#5C5A70]">
                 <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Live System</span>
-                <span>·</span>
-                <span>Postgres & Cloudinary CDN</span>
               </div>
             </div>
           </div>
@@ -1177,7 +1189,7 @@ export default function AdminPage() {
                 </div>
 
                 {/* Role Breakdown & Action Alerts */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Role Distribution */}
                   <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-2xl p-5 shadow-lg space-y-4">
                     <h3 className="text-sm font-bold text-[#F5F3ED] uppercase tracking-wider flex items-center gap-2">
@@ -1237,34 +1249,6 @@ export default function AdminPage() {
                       </div>
                     </div>
                   </div>
-
-                  {/* System Infrastructure Status */}
-                  <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-2xl p-5 shadow-lg space-y-3">
-                    <h3 className="text-sm font-bold text-[#F5F3ED] uppercase tracking-wider flex items-center gap-2">
-                      <Shield size={15} className="text-emerald-400" />
-                      <span>Live Infrastructure</span>
-                    </h3>
-                    <div className="space-y-2 text-xs pt-1">
-                      <div className="flex items-center justify-between p-2 rounded-lg bg-[#0F0F1A] border border-[#3A3A52]">
-                        <span className="text-[#A8A6B8]">Media CDN</span>
-                        <span className="text-emerald-400 font-semibold flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Cloudinary
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between p-2 rounded-lg bg-[#0F0F1A] border border-[#3A3A52]">
-                        <span className="text-[#A8A6B8]">Database</span>
-                        <span className="text-emerald-400 font-semibold flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Supabase Postgres
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between p-2 rounded-lg bg-[#0F0F1A] border border-[#3A3A52]">
-                        <span className="text-[#A8A6B8]">Email Service</span>
-                        <span className="text-emerald-400 font-semibold flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Resend API
-                        </span>
-                      </div>
-                    </div>
-                  </div>
                 </div>
               </div>
             )}
@@ -1278,7 +1262,7 @@ export default function AdminPage() {
                       <ShieldCheck size={20} className="text-[#C9A84C]" />
                       <span>Real-Time KYC & Identity Document Inspection</span>
                     </h2>
-                    <p className="text-xs text-[#A8A6B8] mt-0.5">Inspect Cloudinary uploaded Front ID, Back ID, Selfie, and Business Cert photos before approving</p>
+                    <p className="text-xs text-[#A8A6B8] mt-0.5">Inspect uploaded Front ID, Back ID, Selfie, and Business Cert photos before approving</p>
                   </div>
                   <span className="text-xs px-3 py-1.5 rounded-full bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 font-bold">
                     {stats.pendingKYC} Pending Review
@@ -1321,7 +1305,7 @@ export default function AdminPage() {
                             <div className="flex justify-between text-[#A8A6B8]">
                               <span>Photos Submitted:</span>
                               <span className="text-emerald-400 font-bold">
-                                {[user.kyc_front_url, user.kyc_back_url, user.kyc_selfie_url, user.kyc_business_cert_url].filter(Boolean).length} Cloudinary Images
+                                {[user.kyc_front_url, user.kyc_back_url, user.kyc_selfie_url, user.kyc_business_cert_url].filter(Boolean).length} Uploaded Images
                               </span>
                             </div>
                           </div>
@@ -2550,53 +2534,6 @@ export default function AdminPage() {
                 </div>
               </div>
             )}
-            {activeTab === "docs" && (
-              <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-2xl p-6 shadow-xl space-y-6">
-                <div>
-                  <h2 className="text-lg font-bold text-[#F5F3ED] flex items-center gap-2">
-                    <Settings size={18} className="text-[#C9A84C]" />
-                    <span>REACH Operating System Architecture & Data Schema</span>
-                  </h2>
-                  <p className="text-xs text-[#5C5A70] mt-0.5">Official operational documentation and integration specifications</p>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-                  <div className="space-y-3">
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-[#C9A84C]">Core Services</h3>
-                    <div className="p-4 rounded-xl bg-[#0F0F1A] border border-[#3A3A52] text-xs space-y-2.5">
-                      <div className="flex justify-between">
-                        <span className="text-[#A8A6B8]">Database Engine:</span>
-                        <span className="text-[#F5F3ED] font-mono">PostgreSQL (Supabase RLS)</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-[#A8A6B8]">Storage & Media Pipeline:</span>
-                        <span className="text-[#F5F3ED] font-mono">Cloudinary Global CDN</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-[#A8A6B8]">Realtime WebSocket:</span>
-                        <span className="text-[#F5F3ED] font-mono">Supabase Realtime v2</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-[#A8A6B8]">Transactional Emails:</span>
-                        <span className="text-[#F5F3ED] font-mono">Resend API (v2 SDK)</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-[#C9A84C]">Primary Database Tables</h3>
-                    <div className="p-4 rounded-xl bg-[#0F0F1A] border border-[#3A3A52] text-xs space-y-2 font-mono text-[#A8A6B8]">
-                      <div>• <span className="text-[#F5F3ED]">profiles</span>: Users, KYC status, tiers, trust scores</div>
-                      <div>• <span className="text-[#F5F3ED]">projects</span>: Startup pitch decks, whitepapers, sectors</div>
-                      <div>• <span className="text-[#F5F3ED]">jobs & applications</span>: Postings, resumes, candidates</div>
-                      <div>• <span className="text-[#F5F3ED]">community_posts</span>: Discussions, likes, media links</div>
-                      <div>• <span className="text-[#F5F3ED]">messages & conversations</span>: Direct chats, calls</div>
-                      <div>• <span className="text-[#F5F3ED]">upgrade_requests</span>: Payment references & plan logs</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
 
             {/* 9. UNIVERSAL AUDIT & ACTIVITY VAULT TAB */}
             {activeTab === "audit" && (
@@ -2823,7 +2760,7 @@ export default function AdminPage() {
 
               {/* Uploaded Document Lightbox Grid */}
               <div className="flex-1 p-5 overflow-y-auto space-y-4 bg-[#0F0F1A]">
-                <h4 className="text-xs font-bold text-[#A8A6B8] uppercase tracking-wider">Cloudinary Uploaded ID Document Photos</h4>
+                <h4 className="text-xs font-bold text-[#A8A6B8] uppercase tracking-wider">Uploaded ID Document Photos</h4>
                 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* Front ID */}

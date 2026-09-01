@@ -49,30 +49,69 @@ export async function GET(request: NextRequest) {
       // Check if user profile already exists
       const { data: existingProfile } = await serviceSupabase
         .from("profiles")
-        .select("id, role, username")
+        .select("id, role, username, country, avatar_url, full_name")
         .eq("id", userId)
         .maybeSingle();
 
+      const baseUsername = (
+        data.user.user_metadata?.user_name ||
+        data.user.user_metadata?.name ||
+        userEmail?.split("@")[0] ||
+        "user"
+      )
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "")
+        .slice(0, 12);
+      const randomSuffix = Math.floor(1000 + Math.random() * 9000).toString();
+      const generatedUsername = `${baseUsername || "user"}_${randomSuffix}`;
+      const avatarUrl =
+        data.user.user_metadata?.avatar_url ||
+        data.user.user_metadata?.picture ||
+        null;
+
+      const headerCountry =
+        request.headers.get("x-vercel-ip-country") ||
+        request.headers.get("cf-ipcountry") ||
+        "";
+
       if (!existingProfile) {
         // Create initial profile for new OAuth user
-        const baseUsername = (data.user.user_metadata?.name || userEmail?.split("@")[0] || "user")
-          .toLowerCase()
-          .replace(/[^a-z0-9]/g, "")
-          .slice(0, 12);
-        const randomSuffix = Math.floor(1000 + Math.random() * 9000).toString();
-        const generatedUsername = `${baseUsername}_${randomSuffix}`;
-
-        await serviceSupabase.from("profiles").insert({
+        await serviceSupabase.from("profiles").upsert({
           id: userId,
           full_name: userName,
           username: generatedUsername,
-          avatar_url: data.user.user_metadata?.avatar_url || data.user.user_metadata?.picture || null,
+          avatar_url: avatarUrl,
+          country: headerCountry || null,
           role: null, // Require role selection
           subscription_tier: "free",
+          email_verified: true,
         });
 
         // New OAuth user -> redirect to role selection
         return NextResponse.redirect(`${origin}/auth/role`);
+      } else {
+        // Profile exists (possibly inserted by database trigger) - ensure username, avatar, and full_name are populated
+        const updates: Record<string, any> = {};
+        if (!existingProfile.username) {
+          updates.username = generatedUsername;
+        }
+        if (!existingProfile.avatar_url && avatarUrl) {
+          updates.avatar_url = avatarUrl;
+        }
+        if (!existingProfile.full_name && userName) {
+          updates.full_name = userName;
+        }
+        if (!existingProfile.country && headerCountry) {
+          updates.country = headerCountry;
+        }
+        updates.email_verified = true;
+
+        if (Object.keys(updates).length > 0) {
+          await serviceSupabase
+            .from("profiles")
+            .update(updates)
+            .eq("id", userId);
+        }
       }
 
       // If user has no role assigned yet -> redirect to role selection

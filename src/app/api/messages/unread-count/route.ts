@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
     // 2. Fetch unread messages in these conversations where the user is not the sender
     const { data: unreadMessages, error: msgError } = await supabase
       .from("messages")
-      .select("id, conversation_id, delivery_status, is_read")
+      .select("id, conversation_id, delivery_status")
       .in("conversation_id", conversationIds)
       .neq("sender_id", userId);
 
@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
 
     // Filter messages that have not been read yet
     const unread = (unreadMessages || []).filter(
-      (m: any) => m.delivery_status !== "read" && m.is_read !== true
+      (m: any) => m.delivery_status !== "read"
     );
 
     const byConversation: Record<string, number> = {};

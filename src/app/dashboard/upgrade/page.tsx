@@ -10,7 +10,7 @@ import {
   Building2, Wallet, ArrowLeft,
   Sparkles, Zap, Shield,
   MessageCircle, BarChart2,
-  Eye, FileText, Star, Lock, Clock,
+  Eye, EyeOff, FileText, Star, Lock, Clock,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
@@ -57,7 +57,7 @@ const INVESTOR_TIERS: Tier[] = [
       { label: "AI match engine", included: false },
       { label: "Deal pipeline access", included: false },
       { label: "Meeting scheduling", included: false },
-      { label: "Anonymous browsing mode", included: false },
+      { label: "Anonymous chat & browsing mode", included: false },
       { label: "Priority in investor feed", included: false },
       { label: "Verified investor badge", included: false },
       { label: "Private deal rooms", included: false },
@@ -82,7 +82,7 @@ const INVESTOR_TIERS: Tier[] = [
       { label: "Meeting scheduling", included: true },
       { label: "Verified Pro investor badge", included: true },
       { label: "Investment portfolio tracker", included: true },
-      { label: "Anonymous browsing mode", included: false },
+      { label: "Anonymous chat & browsing mode", included: false },
       { label: "Priority placement in feed", included: false },
       { label: "Private deal rooms", included: false },
     ],
@@ -100,7 +100,8 @@ const INVESTOR_TIERS: Tier[] = [
     ctaStyle: "bg-[#C9A84C] text-[#1A1A2E] hover:opacity-90",
     features: [
       { label: "Everything in Pro", included: true },
-      { label: "Anonymous browsing & contact", included: true },
+      { label: "Anonymous chat & deal rooms (toggleable)", included: true },
+      { label: "Anonymous browsing & public masking", included: true },
       { label: "Priority placement in all feeds", included: true },
       { label: "Gold premium investor badge", included: true },
       { label: "Private deal rooms", included: true },
@@ -201,7 +202,7 @@ const INVESTOR_FEATURE_ICONS = [
   { icon: Sparkles, label: "AI match engine", pro: true, premium: true },
   { icon: MessageCircle, label: "Unlimited messaging", pro: true, premium: true },
   { icon: FileText, label: "Deal pipeline", pro: true, premium: true },
-  { icon: Eye, label: "Anonymous browsing", pro: false, premium: true },
+  { icon: EyeOff, label: "Anonymous chat & browsing", pro: false, premium: true },
   { icon: Star, label: "Priority placement", pro: false, premium: true },
   { icon: Lock, label: "Private deal rooms", pro: false, premium: true },
 ];

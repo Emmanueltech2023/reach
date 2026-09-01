@@ -54,6 +54,9 @@ export const metadata: Metadata = {
   manifest: "/site.webmanifest",
 };
 
+import PwaInstallPrompt from "@/components/PwaInstallPrompt";
+import CookieConsentBanner from "@/components/CookieConsentBanner";
+
 export default function RootLayout({
   children,
 }: {
@@ -65,6 +68,8 @@ export default function RootLayout({
         <CurrencyProvider>
           <Web3Provider>
             {children}
+            <PwaInstallPrompt />
+            <CookieConsentBanner />
           </Web3Provider>
         </CurrencyProvider>
       </body>

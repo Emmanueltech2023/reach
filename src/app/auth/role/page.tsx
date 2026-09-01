@@ -42,6 +42,36 @@ export default function RoleSelectionPage() {
     if (typeof window !== "undefined") {
       const preferred = sessionStorage.getItem("preferred_role");
       if (preferred) setSelected(preferred);
+
+      // Auto-detect location & currency if not already detected
+      if (!sessionStorage.getItem("detected_country")) {
+        fetch("https://ipapi.co/json/")
+          .then((r) => (r.ok ? r.json() : null))
+          .then((data) => {
+            if (data && (data.country_name || data.country_code)) {
+              const country = data.country_name || data.country_code;
+              sessionStorage.setItem("detected_country", country);
+              if (data.currency) {
+                sessionStorage.setItem("detected_currency", data.currency);
+              }
+            }
+          })
+          .catch(() => {
+            try {
+              const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+              if (tz.includes("Lagos") || tz.includes("Africa/")) {
+                sessionStorage.setItem("detected_country", "Nigeria");
+                sessionStorage.setItem("detected_currency", "NGN");
+              } else if (tz.includes("London") || tz.includes("Europe/")) {
+                sessionStorage.setItem("detected_country", "United Kingdom");
+                sessionStorage.setItem("detected_currency", "GBP");
+              } else if (tz.includes("America/") || tz.includes("New_York") || tz.includes("Los_Angeles")) {
+                sessionStorage.setItem("detected_country", "United States");
+                sessionStorage.setItem("detected_currency", "USD");
+              }
+            } catch {}
+          });
+      }
     }
   }, []);
 

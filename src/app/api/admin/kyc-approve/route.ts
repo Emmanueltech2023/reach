@@ -55,12 +55,13 @@ export async function POST(req: NextRequest) {
 
     await supabase.from("notifications").insert({
       user_id: userId,
-      title: action === "approve" ? "KYC Approved ✓" : "KYC Rejected",
+      title: action === "approve" ? "KYC Identity Verified" : "KYC Verification Declined",
       body: action === "approve"
-        ? "Your identity documents have been approved. You now have full verified status."
-        : `KYC documents declined: ${rejectionReason || "Please upload clearer document photos and resubmit."}`,
+        ? "Your identity verification documents have been approved. You now have full verified status on REACH."
+        : `Your identity verification could not be approved. Reason: ${rejectionReason || "Please upload clearer, valid documents and resubmit."} You can resubmit your verification on your profile.`,
       type: "general",
       action_url: action === "approve" ? dashUrl : "/dashboard/profile",
+      is_read: false,
     });
 
     if (action === "approve") {

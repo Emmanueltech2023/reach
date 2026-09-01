@@ -16,6 +16,7 @@ export async function POST(req: NextRequest) {
       category, sector, fundingGoal, equityOffered,
       amountAlreadyRaised, country, website, twitter,
       stage, tier, logoUrl, bannerUrl,
+      hasPhysicalOffice, officeAddress, teamSize,
     } = body;
 
     if (!founderId || !name) {
@@ -46,29 +47,35 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 3. Proceed with Insertion (Original logic)
+    // 3. Proceed with Insertion
+    const projectPayload: Record<string, any> = {
+      founder_id: founderId,
+      name,
+      short_description: shortDescription,
+      full_description: fullDescription,
+      category,
+      sector,
+      funding_goal: fundingGoal,
+      equity_offered: equityOffered,
+      amount_raised: amountAlreadyRaised || 0,
+      amount_already_raised: amountAlreadyRaised || 0,
+      country,
+      website: website || null,
+      twitter: twitter || null,
+      stage: stage || "idea",
+      tier: userTier,
+      logo_url: logoUrl || null,
+      banner_url: bannerUrl || null,
+      is_published: true,
+    };
+
+    if (hasPhysicalOffice !== undefined) projectPayload.has_physical_office = hasPhysicalOffice;
+    if (officeAddress) projectPayload.office_address = officeAddress;
+    if (teamSize) projectPayload.team_size = teamSize;
+
     const { data, error } = await supabase
       .from("projects")
-      .insert({
-        founder_id: founderId,
-        name,
-        short_description: shortDescription,
-        full_description: fullDescription,
-        category,
-        sector,
-        funding_goal: fundingGoal,
-        equity_offered: equityOffered,
-        amount_raised: amountAlreadyRaised || 0,
-        amount_already_raised: amountAlreadyRaised || 0,
-        country,
-        website: website || null,
-        twitter: twitter || null,
-        stage: stage || "idea",
-        tier: userTier, // Use the actual verified tier from your DB check
-        logo_url: logoUrl || null,
-        banner_url: bannerUrl || null,
-        is_published: true,
-      })
+      .insert(projectPayload)
       .select()
       .single();
 

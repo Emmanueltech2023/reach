@@ -10,7 +10,8 @@ import {
   Camera, CheckCircle, CheckCircle2, Globe, X,
   Link2, MapPin, Loader2, Save, Edit2,
   DollarSign, Zap, Sparkles, Eye, EyeOff, ShieldCheck,
-  Mail, Smartphone, Clock, AlertCircle, Star
+  Mail, Smartphone, Clock, AlertCircle, Star, Lock,
+  Building2, Users
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import WalletConnect from "@/components/WalletConnect";
@@ -53,6 +54,8 @@ type Profile = {
   is_anonymous?: boolean;
   is_scam?: boolean;
   is_banned?: boolean;
+  office_address?: string;
+  team_size?: string;
 };
 
 export default function ProfilePage() {
@@ -96,6 +99,8 @@ export default function ProfilePage() {
     min_ticket_size: "",
     max_ticket_size: "",
     preferred_currency: "",
+    office_address: "",
+    team_size: "",
   });
 
   // Define fetchProfile outside to use in other handlers
@@ -111,6 +116,39 @@ export default function ProfilePage() {
       .single();
 
     if (data) {
+      // Auto-heal missing username for legacy or OAuth accounts
+      if (!data.username && user.email) {
+        const fallbackUser =
+          user.email.split("@")[0].toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 12) +
+          "_" +
+          Math.floor(1000 + Math.random() * 9000);
+        data.username = fallbackUser;
+        fetch("/api/profile/update", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId: user.id, updates: { username: fallbackUser } }),
+        }).catch(() => {});
+      }
+
+      // Auto-detect and set location if missing
+      if (!data.country) {
+        fetch("https://ipapi.co/json/")
+          .then((r) => (r.ok ? r.json() : null))
+          .then((geo) => {
+            if (geo && (geo.country_name || geo.country_code)) {
+              const detectedLoc = geo.country_name || geo.country_code;
+              data.country = detectedLoc;
+              setProfile((prev) => (prev ? { ...prev, country: detectedLoc } : prev));
+              fetch("/api/profile/update", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ userId: user.id, updates: { country: detectedLoc } }),
+              }).catch(() => {});
+            }
+          })
+          .catch(() => {});
+      }
+
       setProfile(data);
       setForm({
         full_name: data.full_name || "",
@@ -123,6 +161,8 @@ export default function ProfilePage() {
         min_ticket_size: data.min_ticket_size?.toString() || "",
         max_ticket_size: data.max_ticket_size?.toString() || "",
         preferred_currency: (data as any).preferred_currency || "USD",
+        office_address: (data as any).office_address || "",
+        team_size: (data as any).team_size || "",
       });
     }
     setLoading(false);
@@ -223,6 +263,8 @@ export default function ProfilePage() {
           twitter: form.twitter,
           country: form.country,
           preferred_currency: form.preferred_currency,
+          office_address: form.office_address,
+          team_size: form.team_size,
           investment_focus: form.investment_focus,
           min_ticket_size: form.min_ticket_size
             ? parseFloat(form.min_ticket_size)
@@ -310,7 +352,10 @@ export default function ProfilePage() {
               )}
             </div>
             {editing && (
-              <label className="absolute bottom-0 right-0 w-7 h-7 bg-[#C9A84C] rounded-full flex items-center justify-center cursor-pointer">
+              <label
+                title="Upload real face portrait (no cartoons/memes)"
+                className="absolute bottom-0 right-0 w-7 h-7 bg-[#C9A84C] rounded-full flex items-center justify-center cursor-pointer hover:opacity-90 transition shadow-md"
+              >
                 <Camera size={14} className="text-[#1A1A2E]" />
                 <input type="file" accept="image/*" className="hidden"
                   onChange={(e) => e.target.files?.[0] && handleImageUpload(e.target.files[0], "avatar")} />
@@ -357,7 +402,69 @@ export default function ProfilePage() {
           </button>
         </div>
 
-        {/* KYC + subscription status */}
+        {/* Real photo guideline notice for founders / builders — disappears once photo is uploaded */}
+        {profile?.role === "builder" && !(avatarPreview || profile?.avatar_url) && (
+          <div className="bg-[#141422] border border-[#C9A84C]/30 rounded-xl p-3.5 flex items-start gap-3 shadow-lg shadow-black/20 animate-in fade-in duration-200">
+            <div className="w-8 h-8 rounded-lg bg-[#C9A84C]/10 border border-[#C9A84C]/30 flex items-center justify-center shrink-0 text-[#C9A84C] mt-0.5">
+              <Camera size={16} />
+            </div>
+            <div className="flex-1 text-xs leading-relaxed">
+              <div className="font-bold text-[#F5F3ED] flex items-center gap-1.5 mb-0.5">
+                <span className="text-[#C9A84C]">Real Portrait Photo Required for Founders</span>
+                <span className="text-[10px] bg-[#C9A84C]/20 text-[#C9A84C] font-semibold px-2 py-0.5 rounded-full">Compliance</span>
+              </div>
+              <p className="text-[#A8A6B8]">
+                To maintain investor trust and pass KYC verification, founders must upload an authentic, clear photograph of their face. Cartoon avatars, anime characters, 3D renderings, and memes are not permitted.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Subscription Plan Card (Top Access) */}
+        <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-xl p-5 flex flex-col gap-4 shadow-lg shadow-black/20">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5 min-w-0">
+              <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
+                features.tier === "premium"
+                  ? "bg-[#C9A84C15] border border-[#C9A84C30] text-[#C9A84C]"
+                  : features.tier === "pro"
+                  ? "bg-blue-900/30 border border-blue-800 text-blue-400"
+                  : "bg-[#0A0A0F] border border-[#3A3A52] text-[#5C5A70]"
+              }`}>
+                {features.tier === "premium" ? <Sparkles size={20} /> : features.tier === "pro" ? <Zap size={20} /> : <ShieldCheck size={20} />}
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-[#F5F3ED] text-base font-semibold whitespace-nowrap">Subscription Plan</h3>
+                  <span className={`text-xs px-2.5 py-0.5 rounded-full border font-bold capitalize whitespace-nowrap ${
+                    features.tier === "premium"
+                      ? "bg-[#C9A84C20] text-[#C9A84C] border-[#C9A84C30]"
+                      : features.tier === "pro"
+                      ? "bg-blue-900/30 text-blue-400 border-blue-800"
+                      : "bg-[#0A0A0F] text-[#5C5A70] border-[#3A3A52]"
+                  }`}>
+                    {features.tier}
+                  </span>
+                </div>
+                <p className="text-[#8E8CA0] text-xs mt-0.5">
+                  {features.tier === "premium"
+                    ? "Full access to AI startup scoring, deal rooms & anonymous mode."
+                    : features.tier === "pro"
+                    ? "Unlimited messaging, meeting booking & analytics access."
+                    : "Free tier access with standard messaging and search limits."}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => router.push("/dashboard/upgrade")}
+              className="text-xs font-bold text-[#1A1A2E] bg-[#C9A84C] px-4 py-2.5 rounded-xl hover:opacity-90 transition shrink-0 whitespace-nowrap self-start sm:self-center shadow-md shadow-[#C9A84C]/20"
+            >
+              {features.tier === "premium" ? "Manage Plan" : "Upgrade Plan"}
+            </button>
+          </div>
+        </div>
+
+        {/* KYC + Web3 Wallet status */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
   
   {/* Left Column: Status Indicators */}
@@ -451,48 +558,24 @@ export default function ProfilePage() {
     )}
   </div>
 
-  {/* Right Column: Subscription (Spans full width on mobile if needed) */}
-  <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-xl p-5 flex flex-col justify-center">
-    <h2 className="text-[#F5F3ED] text-xs uppercase tracking-wider font-semibold mb-3">Subscription</h2>
-    <div className="flex items-center justify-between gap-4">
-      <div>
-        <div className="text-[#F5F3ED] text-sm font-medium capitalize">
-          {(profile?.subscription_tier || features.tier || "free").toLowerCase() === "free" ? "Free" : (profile?.subscription_tier || features.tier || "free").toUpperCase()} Plan
-        </div>
-        <div className="text-[#5C5A70] text-[11px] mt-0.5">
-          {(profile?.subscription_tier || features.tier || "free").toLowerCase() === "free"
-            ? "Upgrade to unlock advanced features"
-            : "Active subscription plan"}
-        </div>
-      </div>
-      
-      {(profile?.subscription_tier || features.tier || "free").toLowerCase() === "free" ? (
-        <button
-          onClick={() => router.push("/dashboard/upgrade")}
-          className="bg-[#C9A84C] text-[#1A1A2E] text-xs font-bold px-4 py-2 rounded-lg hover:opacity-90 transition-all shrink-0"
-        >
-          Upgrade
-        </button>
-      ) : (
-        <span className="text-[10px] px-3 py-1 rounded-full bg-[#C9A84C10] text-[#C9A84C] border border-[#C9A84C20] font-bold uppercase">
-          {profile?.subscription_tier || features.tier}
-        </span>
-      )}
-    </div>
-  </div>
-
   {/* Web3 Wallet */}
-<div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-xl p-4">
-  <h2 className="text-[#F5F3ED] text-sm font-medium mb-3">Web3 Wallet</h2>
   {profile && (
     <WalletConnect
       userId={profile.id}
+      initialAddress={profile.wallet_address || undefined}
       onConnected={(address) => {
-        setProfile((prev) => prev ? { ...prev, wallet_address: address } : prev);
+        setProfile((prev) =>
+          prev
+            ? {
+                ...prev,
+                wallet_address: address || null,
+                wallet_verified: !!address,
+              }
+            : prev
+        );
       }}
     />
   )}
-</div>
   
 </div>
 
@@ -527,10 +610,19 @@ export default function ProfilePage() {
                     className="w-full bg-[#0F0F1A] border border-[#3A3A52] text-[#F5F3ED] text-sm rounded-lg px-4 py-2.5 outline-none focus:border-[#C9A84C] transition" />
                 </div>
                 <div>
-                  <label className="text-[#A8A6B8] text-xs mb-1.5 block">Country</label>
-                  <input value={form.country} placeholder="e.g. Nigeria"
-                    onChange={(e) => setForm({ ...form, country: e.target.value })}
-                    className="w-full bg-[#0F0F1A] border border-[#3A3A52] text-[#F5F3ED] text-sm rounded-lg px-4 py-2.5 outline-none focus:border-[#C9A84C] transition placeholder-[#5C5A70]" />
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-[#A8A6B8] text-xs font-medium">Country / Location</label>
+                    <span className="text-[10px] text-[#C9A84C] flex items-center gap-1 font-semibold">
+                      <Lock size={10} /> Locked via Verified Security
+                    </span>
+                  </div>
+                  <input
+                    value={form.country || "Verified Location"}
+                    disabled
+                    readOnly
+                    title="Location is locked for security and verification compliance."
+                    className="w-full bg-[#0F0F1A]/60 border border-[#3A3A52]/60 text-[#A8A6B8] text-sm rounded-lg px-4 py-2.5 outline-none cursor-not-allowed select-none opacity-80"
+                  />
                 </div>
                 <div>
                   <label className="text-[#A8A6B8] text-xs mb-1.5 block">Preferred Currency</label>
@@ -558,12 +650,42 @@ export default function ProfilePage() {
                       className="w-full bg-[#0F0F1A] border border-[#3A3A52] text-[#F5F3ED] text-sm rounded-lg px-4 py-2.5 outline-none focus:border-[#C9A84C] transition placeholder-[#5C5A70]" />
                   </div>
                   <div>
-                    <label className="text-[#A8A6B8] text-xs mb-1.5     block">LinkedIn</label>
+                    <label className="text-[#A8A6B8] text-xs mb-1.5 block">LinkedIn</label>
                     <input value={form.linkedin} placeholder="linkedin.com/in/you"
                       onChange={(e) => setForm({ ...form, linkedin: e.target.value })}
                       className="w-full bg-[#0F0F1A] border border-[#3A3A52] text-[#F5F3ED] text-sm rounded-lg px-4 py-2.5 outline-none focus:border-[#C9A84C] transition placeholder-[#5C5A70]" />
                   </div>
                 </div>
+
+                {/* Builder Company Operations */}
+                {profile?.role === "builder" && (
+                  <div className="pt-2 border-t border-[#3A3A52]/60 flex flex-col gap-3">
+                    <div>
+                      <label className="text-[#A8A6B8] text-xs mb-1.5 block">Live Office Physical Address</label>
+                      <input
+                        value={form.office_address}
+                        placeholder="e.g. Suite 402, Silicon Hub, 14 Marina Road, Lagos (or leave empty if remote)"
+                        onChange={(e) => setForm({ ...form, office_address: e.target.value })}
+                        className="w-full bg-[#0F0F1A] border border-[#3A3A52] text-[#F5F3ED] text-sm rounded-lg px-4 py-2.5 outline-none focus:border-[#C9A84C] transition placeholder-[#5C5A70]"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[#A8A6B8] text-xs mb-1.5 block">Company Staff / Team Size</label>
+                      <select
+                        value={form.team_size}
+                        onChange={(e) => setForm({ ...form, team_size: e.target.value })}
+                        className="w-full bg-[#0F0F1A] border border-[#3A3A52] text-[#F5F3ED] text-sm rounded-lg px-4 py-2.5 outline-none focus:border-[#C9A84C] transition"
+                      >
+                        <option value="">Select team size</option>
+                        <option value="1-5">1 – 5 employees (Early team)</option>
+                        <option value="6-15">6 – 15 employees (Growing squad)</option>
+                        <option value="16-50">16 – 50 employees (Scaling operation)</option>
+                        <option value="51-100">51 – 100 employees (Established company)</option>
+                        <option value="100+">100+ employees (Enterprise)</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
               </>
             ) : (
               <div className="flex flex-col gap-2">
@@ -571,6 +693,18 @@ export default function ProfilePage() {
                   <div className="flex items-center gap-2 text-sm text-[#A8A6B8]">
                     <MapPin size={14} className="text-[#5C5A70]" />
                     {profile.country}
+                  </div>
+                )}
+                {profile?.role === "builder" && profile?.office_address && (
+                  <div className="flex items-center gap-2 text-sm text-[#A8A6B8]">
+                    <Building2 size={14} className="text-[#5C5A70]" />
+                    <span>Office: {profile.office_address}</span>
+                  </div>
+                )}
+                {profile?.role === "builder" && profile?.team_size && (
+                  <div className="flex items-center gap-2 text-sm text-[#A8A6B8]">
+                    <Users size={14} className="text-[#5C5A70]" />
+                    <span>Team: {profile.team_size} active staff members</span>
                   </div>
                 )}
                 {(profile as any)?.preferred_currency && (
@@ -743,50 +877,6 @@ export default function ProfilePage() {
             )}
           </div>
         )}
-
-        {/* Subscription Tier Details */}
-        <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-xl p-5 flex flex-col gap-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                features.tier === "premium"
-                  ? "bg-[#C9A84C15] border border-[#C9A84C30] text-[#C9A84C]"
-                  : features.tier === "pro"
-                  ? "bg-blue-900/30 border border-blue-800 text-blue-400"
-                  : "bg-[#0A0A0F] border border-[#3A3A52] text-[#5C5A70]"
-              }`}>
-                {features.tier === "premium" ? <Sparkles size={18} /> : features.tier === "pro" ? <Zap size={18} /> : <ShieldCheck size={18} />}
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="text-[#F5F3ED] text-sm font-medium">Subscription Plan</h3>
-                  <span className={`text-xs px-2.5 py-0.5 rounded-full border font-semibold capitalize ${
-                    features.tier === "premium"
-                      ? "bg-[#C9A84C20] text-[#C9A84C] border-[#C9A84C30]"
-                      : features.tier === "pro"
-                      ? "bg-blue-900/30 text-blue-400 border-blue-800"
-                      : "bg-[#0A0A0F] text-[#5C5A70] border-[#3A3A52]"
-                  }`}>
-                    {features.tier}
-                  </span>
-                </div>
-                <p className="text-[#5C5A70] text-xs mt-0.5">
-                  {features.tier === "premium"
-                    ? "Full access to AI startup scoring, deal rooms & anonymous mode."
-                    : features.tier === "pro"
-                    ? "Unlimited messaging, meeting booking & analytics access."
-                    : "Free tier access with standard messaging and search limits."}
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={() => router.push("/dashboard/upgrade")}
-              className="text-xs font-medium text-[#F5F3ED] bg-[#0A0A0F] border border-[#3A3A52] px-3.5 py-2 rounded-xl hover:border-[#C9A84C] transition"
-            >
-              {features.tier === "premium" ? "Manage Plan" : "Upgrade Plan"}
-            </button>
-          </div>
-        </div>
 
         {/* Danger zone */}
         <div className="bg-[#1A1A2E] border border-red-900/30 rounded-xl p-4">

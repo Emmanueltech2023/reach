@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
     // 3. Fetch other participants profiles for these conversations
     const { data: otherParticipants, error: otherPartsError } = await supabase
       .from("conversation_participants")
-      .select("conversation_id, user_id, profiles(id, full_name, username, avatar_url, is_verified, is_scam, is_banned, subscription_tier, trust_score, role)")
+      .select("conversation_id, user_id, profiles(id, full_name, username, avatar_url, is_verified, is_scam, is_banned, subscription_tier, trust_score, role, is_anonymous)")
       .in("conversation_id", conversationIds)
       .neq("user_id", userId);
 
@@ -76,10 +76,18 @@ export async function GET(req: NextRequest) {
     // 4. Assemble the exact data contract expected by your UI template
     const formattedConversations = (convos || []).map((c) => {
       const otherPart = otherPartMap.get(c.id);
+      let otherProfile = otherPart?.profiles ? { ...otherPart.profiles } : null;
+
+      // If other user is an investor with is_anonymous active, mask their profile
+      if (otherProfile && otherProfile.is_anonymous && otherProfile.role === "investor") {
+        otherProfile.full_name = "Anonymous Investor";
+        otherProfile.username = "anonymous";
+        otherProfile.avatar_url = null;
+      }
 
       return {
         id: c.id,
-        otherUser: otherPart?.profiles || null,
+        otherUser: otherProfile,
         lastMessage: c.last_message_content || "No messages yet",
         lastMessageTime: c.last_message_at || null,
         unreadCount: unreadMap[c.id] || 0,

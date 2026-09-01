@@ -94,6 +94,33 @@ export async function PATCH(req: NextRequest) {
       details: updates,
     }).catch(() => {});
 
+    // Notification on KYC status update
+    try {
+      if (updates.kyc_status === "approved" || updates.is_verified === true) {
+        const userRole = finalData?.role;
+        const dashUrl = userRole === "builder" ? "/dashboard/builder" : userRole === "talent" ? "/dashboard/talent" : "/dashboard/investor";
+        await supabase.from("notifications").insert({
+          user_id: userId,
+          title: "KYC Identity Verified",
+          body: "Your identity verification documents have been approved. You now have full verified status on REACH.",
+          type: "general",
+          action_url: dashUrl,
+          is_read: false,
+        });
+      } else if (updates.kyc_status === "rejected") {
+        await supabase.from("notifications").insert({
+          user_id: userId,
+          title: "KYC Verification Declined",
+          body: `Your identity verification could not be approved. Reason: ${updates.kyc_rejection_reason || "Please upload clearer, valid documents and resubmit."} You can resubmit your verification on your profile.`,
+          type: "general",
+          action_url: "/dashboard/profile",
+          is_read: false,
+        });
+      }
+    } catch (notifErr) {
+      console.warn("KYC update notification warning:", notifErr);
+    }
+
     return NextResponse.json({ user: finalData || { id: userId, ...updates } });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Failed to update user";

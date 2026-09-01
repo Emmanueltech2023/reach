@@ -15,6 +15,7 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const conversationId = searchParams.get("conversationId");
+    const currentUserId = searchParams.get("userId");
 
     if (!conversationId) {
       return NextResponse.json(
@@ -32,7 +33,9 @@ export async function GET(req: NextRequest) {
           full_name,
           username,
           avatar_url,
-          is_verified
+          is_verified,
+          role,
+          is_anonymous
         )
       `)
       .eq("conversation_id", conversationId)
@@ -40,7 +43,26 @@ export async function GET(req: NextRequest) {
 
     if (error) throw error;
 
-    return NextResponse.json({ messages: data });
+    const formattedMessages = (data || []).map((msg: any) => {
+      if (
+        msg.profiles?.is_anonymous &&
+        msg.profiles?.role === "investor" &&
+        msg.sender_id !== currentUserId
+      ) {
+        return {
+          ...msg,
+          profiles: {
+            ...msg.profiles,
+            full_name: "Anonymous Investor",
+            username: "anonymous",
+            avatar_url: null,
+          },
+        };
+      }
+      return msg;
+    });
+
+    return NextResponse.json({ messages: formattedMessages });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });
@@ -49,6 +71,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    let botMessage: any = null;
     const {
       conversationId,
       senderId,
@@ -192,31 +215,29 @@ export async function POST(req: NextRequest) {
 
         if (recipientRole?.role === "admin" && content) {
           const conciergeReply = handleConciergeQuery(content);
-          
-          // Auto-insert Concierge reply after 800ms delay
-          setTimeout(async () => {
-            try {
-              await supabase.from("messages").insert({
-                conversation_id: conversationId,
-                sender_id: recipientId,
-                content: conciergeReply.reply,
-                message_type: "text",
-                delivery_status: "sent",
-              });
+          try {
+            const { data: bMsg } = await supabase.from("messages").insert({
+              conversation_id: conversationId,
+              sender_id: recipientId,
+              content: conciergeReply.reply,
+              message_type: "text",
+              delivery_status: "sent",
+            }).select().single();
 
-              await supabase.from("conversations").update({
-                last_message_content: conciergeReply.reply,
-                last_message_at: new Date().toISOString(),
-              }).eq("id", conversationId);
-            } catch (conciergeErr) {
-              console.warn("Concierge response notice:", conciergeErr);
-            }
-          }, 800);
+            botMessage = bMsg;
+
+            await supabase.from("conversations").update({
+              last_message_content: conciergeReply.reply,
+              last_message_at: new Date().toISOString(),
+            }).eq("id", conversationId);
+          } catch (conciergeErr) {
+            console.warn("Concierge response notice:", conciergeErr);
+          }
         }
       }
     }
 
-    return NextResponse.json({ message: data });
+    return NextResponse.json({ message: data, botMessage });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });

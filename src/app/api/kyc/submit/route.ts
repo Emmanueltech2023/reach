@@ -55,9 +55,10 @@ export async function POST(req: NextRequest) {
     // Create system notification for user
     await supabase.from("notifications").insert({
       user_id: userId,
-      title: "⏳ KYC Identity Documents Submitted",
-      body: "Your identity verification documents have been received and are pending review by the compliance team.",
+      title: "KYC Verification Pending",
+      body: "Your identity verification documents have been received and are currently pending review. You will be notified as soon as your identity is verified or if any update is required.",
       type: "general",
+      action_url: "/dashboard/profile",
       is_read: false,
     });
 

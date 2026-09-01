@@ -11,7 +11,7 @@ import {
   ShieldCheck, AlertTriangle, TrendingUp,
   Clock, ChevronDown, Info, Zap, Sparkles,
   Edit2, Trash2, Copy, Flag, Check, Download, AlertCircle, FileCheck, Shield, Lock,
-  MoreVertical, MoreHorizontal, Briefcase, ChevronRight, Bot, Headphones,
+  MoreVertical, MoreHorizontal, Briefcase, ChevronRight, Bot, Headphones, Eye, EyeOff,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useVoiceRecorder } from "@/lib/useVoiceRecorder";
@@ -117,7 +117,15 @@ function ChatsInner() {
   } = useVoiceRecorder();
 
   // Auth
-  const [currentUser, setCurrentUser] = useState<{ id: string; full_name: string; role?: string; subscription_tier?: string } | null>(null);
+  const [currentUser, setCurrentUser] = useState<{
+    id: string;
+    full_name: string;
+    role?: string;
+    avatar_url?: string | null;
+    subscription_tier?: string;
+    is_anonymous?: boolean;
+  } | null>(null);
+  const [togglingAnon, setTogglingAnon] = useState(false);
 
   // Conversations
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -148,6 +156,17 @@ function ChatsInner() {
   const [showDealInfo, setShowDealInfo] = useState(false);
   const [inCall, setInCall] = useState(false);
   const [callUrl, setCallUrl] = useState<string | null>(null);
+  const [callState, setCallState] = useState<{
+    status: "idle" | "ringing_outgoing" | "ringing_incoming" | "connected";
+    callerId?: string;
+    callerName?: string;
+    callerAvatar?: string | null;
+    recipientId?: string;
+    recipientName?: string;
+    recipientAvatar?: string | null;
+    isVideo?: boolean;
+    callUrl?: string;
+  }>({ status: "idle" });
   const [meetingForm, setMeetingForm] = useState({
     title: "", agenda: "", date: "", time: "",
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -327,6 +346,38 @@ function ChatsInner() {
     return () => { supabase.removeChannel(channel); };
   }, [activeConversationId, currentUser, supabase]);
 
+  // Listen for Real-Time WhatsApp-Style Call Signals for currentUser
+  useEffect(() => {
+    if (!currentUser?.id) return;
+
+    const callChannel = supabase
+      .channel(`call_user_${currentUser.id}`)
+      .on("broadcast", { event: "incoming_call" }, ({ payload }) => {
+        setCallState({
+          status: "ringing_incoming",
+          callerId: payload.callerId,
+          callerName: payload.callerName,
+          callerAvatar: payload.callerAvatar,
+          isVideo: payload.isVideo,
+          callUrl: payload.callUrl,
+        });
+      })
+      .on("broadcast", { event: "call_ended" }, () => {
+        setCallState({ status: "idle" });
+        setInCall(false);
+      })
+      .on("broadcast", { event: "call_accepted" }, ({ payload }) => {
+        setCallUrl(payload.callUrl);
+        setInCall(true);
+        setCallState({ status: "connected" });
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(callChannel);
+    };
+  }, [currentUser?.id, supabase]);
+
   // ─── Data fetching ─────────────────────────────────────────────────────────
 
   const fetchConversations = async (userId: string) => {
@@ -349,12 +400,40 @@ function ChatsInner() {
     if (!user) return;
     const { data: profile } = await supabase
       .from("profiles")
-      .select("id, full_name, role")
+      .select("id, full_name, role, avatar_url, subscription_tier, is_anonymous")
       .eq("id", user.id)
       .single();
     if (profile) {
       setCurrentUser(profile);
       await fetchConversations(profile.id);
+    }
+  };
+
+  const toggleAnonymous = async () => {
+    if (!currentUser) return;
+    if (currentUser.subscription_tier !== "premium" && !features.canBrowseAnonymously) {
+      router.push("/dashboard/upgrade");
+      return;
+    }
+    const newStatus = !currentUser.is_anonymous;
+    setTogglingAnon(true);
+    setCurrentUser((prev) => (prev ? { ...prev, is_anonymous: newStatus } : prev));
+    try {
+      await fetch("/api/profile/update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: currentUser.id,
+          updates: { is_anonymous: newStatus },
+        }),
+      });
+      if (activeConversationId) {
+        fetchMessages(activeConversationId);
+      }
+    } catch (e) {
+      console.error("Error toggling anonymous mode:", e);
+    } finally {
+      setTogglingAnon(false);
     }
   };
 
@@ -394,11 +473,12 @@ function ChatsInner() {
 
   const fetchMessages = useCallback(async (conversationId: string) => {
     setLoadingMessages(true);
-    const res = await fetch(`/api/messages?conversationId=${conversationId}`);
+    const userIdParam = currentUser?.id ? `&userId=${currentUser.id}` : "";
+    const res = await fetch(`/api/messages?conversationId=${conversationId}${userIdParam}`);
     const { messages: data } = await res.json();
     setMessages(data || []);
     setLoadingMessages(false);
-  }, []);
+  }, [currentUser?.id]);
 
   useEffect(() => {
     if (activeConversationId) fetchMessages(activeConversationId);
@@ -471,7 +551,13 @@ function ChatsInner() {
 
       if (res.ok) {
         if (data.message) {
-          setMessages((prev) => (prev.find((m) => m.id === data.message.id) ? prev : [...prev, data.message]));
+          setMessages((prev) => {
+            let next = prev.find((m) => m.id === data.message.id) ? prev : [...prev, data.message];
+            if (data.botMessage && !next.find((m) => m.id === data.botMessage.id)) {
+              next = [...next, data.botMessage];
+            }
+            return next;
+          });
         } else {
           await fetchMessages(activeConversationId);
         }
@@ -783,25 +869,82 @@ function ChatsInner() {
   // ─── Call ─────────────────────────────────────────────────────────────────
 
   const startCall = async (videoEnabled: boolean) => {
-    if (!activeConversationId) return;
-    const res = await fetch("/api/calls/create-room", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ conversationId: activeConversationId }),
-    });
-    const { url } = await res.json();
-    await fetch("/api/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        conversationId: activeConversationId,
-        senderId: currentUser?.id,
-        content: `📞 ${videoEnabled ? "Video" : "Voice"} call started — Join: ${url}`,
-        messageType: "system",
-      }),
-    });
-    setCallUrl(url);
+    if (!activeConversationId || !currentUser || !activeConvo?.otherUser) return;
+    try {
+      const res = await fetch("/api/calls/create-room", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversationId: activeConversationId }),
+      });
+      const { url } = await res.json();
+      setCallUrl(url);
+
+      setCallState({
+        status: "ringing_outgoing",
+        callerId: currentUser.id,
+        callerName: currentUser.full_name,
+        recipientId: activeConvo.otherUser.id,
+        recipientName: activeConvo.otherUser.full_name,
+        recipientAvatar: activeConvo.otherUser.avatar_url,
+        isVideo: videoEnabled,
+        callUrl: url,
+      });
+
+      // Broadcast incoming_call signal to recipient
+      const recipientChan = supabase.channel(`call_user_${activeConvo.otherUser.id}`);
+      recipientChan.subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          recipientChan.send({
+            type: "broadcast",
+            event: "incoming_call",
+            payload: {
+              callerId: currentUser.id,
+              callerName: currentUser.full_name,
+              callerAvatar: currentUser.avatar_url,
+              conversationId: activeConversationId,
+              isVideo: videoEnabled,
+              callUrl: url,
+            },
+          });
+        }
+      });
+    } catch (e) {
+      console.error("Start call error:", e);
+      alert("Call initiation failed.");
+    }
+  };
+
+  const acceptCall = () => {
+    if (!callState.callUrl || !callState.callerId) return;
+    setCallUrl(callState.callUrl);
     setInCall(true);
+    setCallState({ status: "connected" });
+
+    // Signal caller that call was accepted
+    const callerChan = supabase.channel(`call_user_${callState.callerId}`);
+    callerChan.subscribe((status) => {
+      if (status === "SUBSCRIBED") {
+        callerChan.send({
+          type: "broadcast",
+          event: "call_accepted",
+          payload: { callUrl: callState.callUrl },
+        });
+      }
+    });
+  };
+
+  const declineCall = () => {
+    const targetId = callState.callerId || callState.recipientId;
+    if (targetId) {
+      const chan = supabase.channel(`call_user_${targetId}`);
+      chan.subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          chan.send({ type: "broadcast", event: "call_ended", payload: {} });
+        }
+      });
+    }
+    setCallState({ status: "idle" });
+    setInCall(false);
   };
 
   // ─── Render ───────────────────────────────────────────────────────────────
@@ -809,7 +952,76 @@ function ChatsInner() {
   return (
     <div className="h-screen bg-[#0A0A0F] flex flex-col overflow-hidden">
 
-      {/* CALL OVERLAY */}
+      {/* OUTGOING RINGING CALL OVERLAY */}
+      {callState.status === "ringing_outgoing" && (
+        <div className="fixed inset-0 z-50 bg-[#0A0A0F]/95 backdrop-blur-xl flex flex-col items-center justify-center p-6 animate-in fade-in duration-300">
+          <div className="relative mb-6">
+            <div className="w-28 h-28 rounded-full bg-[#C9A84C]/10 border-2 border-[#C9A84C]/40 animate-ping absolute inset-0" />
+            <div className="w-28 h-28 rounded-full bg-[#1A1A2E] border-2 border-[#C9A84C] flex items-center justify-center text-3xl font-bold text-[#C9A84C] relative overflow-hidden shadow-2xl shadow-[#C9A84C]/20">
+              {callState.recipientAvatar ? (
+                <img src={callState.recipientAvatar} alt="" className="w-full h-full object-cover" />
+              ) : (
+                getInitials(callState.recipientName || "?")
+              )}
+            </div>
+          </div>
+          <h2 className="text-xl font-bold text-[#F5F3ED] mb-1">
+            Calling {callState.recipientName}…
+          </h2>
+          <p className="text-xs text-[#A8A6B8] mb-8 flex items-center gap-1.5 font-medium">
+            {callState.isVideo ? <Video size={14} className="text-[#C9A84C]" /> : <Phone size={14} className="text-[#C9A84C]" />}
+            Outgoing {callState.isVideo ? "Video" : "Voice"} Call · Ringing
+          </p>
+          <button
+            onClick={declineCall}
+            className="w-16 h-16 rounded-full bg-red-600 hover:bg-red-700 text-white flex items-center justify-center shadow-xl shadow-red-900/40 active:scale-95 transition cursor-pointer"
+            title="Cancel Call"
+          >
+            <Phone size={24} className="rotate-[135deg]" />
+          </button>
+        </div>
+      )}
+
+      {/* INCOMING RINGING CALL OVERLAY */}
+      {callState.status === "ringing_incoming" && (
+        <div className="fixed inset-0 z-50 bg-[#0A0A0F]/95 backdrop-blur-xl flex flex-col items-center justify-center p-6 animate-in zoom-in-95 duration-300">
+          <div className="relative mb-6">
+            <div className="w-28 h-28 rounded-full bg-emerald-500/20 border-2 border-emerald-500/50 animate-ping absolute inset-0" />
+            <div className="w-28 h-28 rounded-full bg-[#1A1A2E] border-2 border-emerald-500 flex items-center justify-center text-3xl font-bold text-emerald-400 relative overflow-hidden shadow-2xl shadow-emerald-500/20">
+              {callState.callerAvatar ? (
+                <img src={callState.callerAvatar} alt="" className="w-full h-full object-cover" />
+              ) : (
+                getInitials(callState.callerName || "?")
+              )}
+            </div>
+          </div>
+          <h2 className="text-xl font-bold text-[#F5F3ED] mb-1">
+            {callState.callerName} is calling…
+          </h2>
+          <p className="text-xs text-[#A8A6B8] mb-8 flex items-center gap-1.5 font-medium">
+            {callState.isVideo ? <Video size={14} className="text-emerald-400" /> : <Phone size={14} className="text-emerald-400" />}
+            Incoming {callState.isVideo ? "Video" : "Voice"} Call
+          </p>
+          <div className="flex items-center gap-8">
+            <button
+              onClick={declineCall}
+              className="w-16 h-16 rounded-full bg-red-600 hover:bg-red-700 text-white flex items-center justify-center shadow-xl shadow-red-900/40 active:scale-95 transition cursor-pointer"
+              title="Decline Call"
+            >
+              <Phone size={24} className="rotate-[135deg]" />
+            </button>
+            <button
+              onClick={acceptCall}
+              className="w-16 h-16 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white flex items-center justify-center shadow-xl shadow-emerald-900/40 active:scale-95 transition cursor-pointer animate-bounce"
+              title="Answer Call"
+            >
+              <Phone size={24} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ACTIVE CONNECTED CALL OVERLAY */}
       {inCall && callUrl && (
         <div className="fixed inset-0 z-50 bg-black flex flex-col">
           <div className="flex items-center justify-between px-4 py-3 bg-[#0A0A0F] border-b border-[#1A1A2E]">
@@ -844,25 +1056,72 @@ function ChatsInner() {
               ? "/dashboard/builder" 
               : "/dashboard/investor"
           )}
-          className="p-1 -ml-1 text-[#6B6A7A] hover:text-[#F0EEE8] transition"
+          className="p-1.5 -ml-1 rounded-lg hover:bg-[#1A1A2E] text-[#6B6A7A] hover:text-[#F0EEE8] transition"
           title="Back to dashboard"
         >
-          <ArrowLeft size={18} className="text-[#6B6A7A]" />
+          <ArrowLeft size={18} />
         </button>
-        <div className="w-7 h-7 rounded bg-gradient-to-br from-[#C9A84C] to-[#8B6B1A] flex items-center justify-center shrink-0">
-          <span className="text-[#0A0A0F] text-xs font-bold">iV</span>
-        </div>
-        <div className="flex-1">
-          <h1 className="text-sm font-medium text-[#F0EEE8] leading-none">
-            {currentUser?.role === "talent" ? "Messages & Hiring" : "Deal room"}
+        <img
+          src="/logo-icon.png"
+          alt="REACH"
+          className="w-8 h-8 rounded-lg shrink-0 object-contain shadow-sm shadow-[#C9A84C]/20 cursor-pointer"
+          onClick={() => router.push(
+            currentUser?.role === "talent" 
+              ? "/dashboard/talent" 
+              : currentUser?.role === "builder" 
+              ? "/dashboard/builder" 
+              : "/dashboard/investor"
+          )}
+        />
+        <div className="flex-1 min-w-0">
+          <h1 className="text-sm font-bold text-[#F0EEE8] leading-none flex items-center gap-1.5">
+            <span>R<span className="text-[#C9A84C]">EACH</span></span>
+            <span className="text-[#3A3A52]">·</span>
+            <span className="text-xs font-medium text-[#A8A6B8]">
+              {currentUser?.role === "talent" ? "Messages & Hiring" : "Deal Room"}
+            </span>
           </h1>
-          <p className="text-[#6B6A7A] text-xs mt-0.5">
-            {currentUser?.role === "talent" ? "Recruiter Channels · Direct Hiring" : "Secure · Monitored · Compliant"}
+          <p className="text-[#6B6A7A] text-[11px] mt-0.5 truncate">
+            {currentUser?.role === "talent" ? "Recruiter Channels · Direct Hiring" : "Secure · Monitored · Compliant Deal Room"}
           </p>
         </div>
-        <div className="flex items-center gap-1.5">
+        {/* Anonymous Mode Switch for Investors */}
+        {currentUser?.role === "investor" && (
+          <button
+            type="button"
+            onClick={toggleAnonymous}
+            disabled={togglingAnon}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition cursor-pointer shrink-0 ${
+              currentUser.is_anonymous
+                ? "bg-[#C9A84C]/20 border-[#C9A84C]/60 text-[#C9A84C] shadow-[0_0_12px_rgba(201,168,76,0.25)] hover:bg-[#C9A84C]/25"
+                : "bg-[#1A1A2E] border-[#3A3A52] text-[#8E8CA0] hover:text-[#F5F3ED] hover:border-[#5C5A70]"
+            }`}
+            title={
+              currentUser.subscription_tier !== "premium" && !features.canBrowseAnonymously
+                ? "Upgrade to Premium to chat anonymously"
+                : currentUser.is_anonymous
+                ? "Anonymous Chat Active: Profile hidden from founders. Click to turn off."
+                : "Click to enable Anonymous Chat"
+            }
+          >
+            {currentUser.is_anonymous ? <EyeOff size={13} className="text-[#C9A84C]" /> : <Eye size={13} />}
+            <span className="hidden sm:inline">
+              {currentUser.is_anonymous ? "Anonymous: ON" : "Anonymous: OFF"}
+            </span>
+            <span className="sm:hidden">
+              {currentUser.is_anonymous ? "Anon ON" : "Anon OFF"}
+            </span>
+            {currentUser.subscription_tier !== "premium" && !features.canBrowseAnonymously && (
+              <span className="text-[9px] bg-[#C9A84C] text-[#0A0A0F] font-extrabold px-1.5 py-0.2 rounded uppercase">
+                Premium
+              </span>
+            )}
+          </button>
+        )}
+
+        <div className="hidden sm:flex items-center gap-1.5 bg-emerald-950/40 border border-emerald-800/40 px-2.5 py-1 rounded-full shrink-0">
           <ShieldCheck size={13} className="text-emerald-400" />
-          <span className="text-emerald-400 text-xs font-medium">Protected</span>
+          <span className="text-emerald-400 text-xs font-semibold">Protected</span>
         </div>
       </header>
 
@@ -1188,6 +1447,26 @@ function ChatsInner() {
                     </button>
                   </div>
                 ) : null}
+
+                {/* Active Anonymity Notice Banner for Investors */}
+                {currentUser?.role === "investor" && currentUser?.is_anonymous && (
+                  <div className="flex items-center justify-between px-4 py-2 bg-[#C9A84C]/10 border-t border-[#C9A84C]/25 text-xs text-[#C9A84C]">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <EyeOff size={13} className="text-[#C9A84C] shrink-0" />
+                      <span className="truncate">
+                        <strong>Anonymous Mode Active:</strong> Founders see your messages from &ldquo;Anonymous Investor&rdquo;.
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={toggleAnonymous}
+                      disabled={togglingAnon}
+                      className="text-[11px] underline hover:text-[#F5F3ED] font-semibold shrink-0 ml-3 cursor-pointer"
+                    >
+                      Turn Off
+                    </button>
+                  </div>
+                )}
 
                 {/* Policy banner */}
                 <div className="flex items-center gap-2 px-4 py-1.5 border-t border-[#1A1A2E] bg-[#0A0A0F]">
@@ -1812,6 +2091,30 @@ function ChatsInner() {
                   >
                     Send
                   </button>
+                </div>
+              )}
+
+              {/* PRE-MESSAGE QUICK CHIPS FOR CONCIERGE BOT */}
+              {isConciergeConvo && (
+                <div className="flex items-center gap-2 px-4 py-2 border-t border-[#1A1A2E] bg-[#0A0A0F] overflow-x-auto shrink-0 scrollbar-none">
+                  <span className="text-[10px] uppercase font-bold text-[#C9A84C] shrink-0 flex items-center gap-1">
+                    <Sparkles size={10} /> Quick Ask:
+                  </span>
+                  {[
+                    "How do I verify my account?",
+                    "How do I post a job or search talent?",
+                    "How does the deal pipeline work?",
+                    "What are the Pro subscription perks?",
+                  ].map((promptText) => (
+                    <button
+                      key={promptText}
+                      type="button"
+                      onClick={() => void doSend(promptText)}
+                      className="text-xs text-[#A8A6B8] hover:text-[#C9A84C] bg-[#1A1A2E] border border-[#2A2A3E] hover:border-[#C9A84C]/50 px-3 py-1.5 rounded-full shrink-0 transition whitespace-nowrap cursor-pointer"
+                    >
+                      {promptText}
+                    </button>
+                  ))}
                 </div>
               )}
 

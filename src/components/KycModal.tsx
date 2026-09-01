@@ -114,11 +114,8 @@ export default function KycModal({ isOpen, onClose, userId, userRole, actionCont
               </span>
             </div>
             <div>
-              <h3 className="text-base font-bold text-[#F5F3ED] flex items-center gap-2">
-                <span>Identity Verification (KYC)</span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#C9A84C]/20 border border-[#C9A84C]/40 text-[#C9A84C] font-bold">
-                  256-Bit Encrypted
-                </span>
+              <h3 className="text-base font-bold text-[#F5F3ED]">
+                Identity Verification (KYC)
               </h3>
               <p className="text-xs text-[#A8A6B8]">
                 {actionContext || "Verify identity documents to unlock dealrooms & features"}
@@ -307,6 +304,14 @@ export default function KycModal({ isOpen, onClose, userId, userRole, actionCont
                   />
                 </label>
               )}
+            </div>
+
+            {/* Founder Real Photo Compliance Rule */}
+            <div className="bg-[#0F0F1A] border border-[#C9A84C]/25 rounded-xl p-3 flex items-start gap-2.5 text-xs">
+              <ShieldCheck size={16} className="text-[#C9A84C] shrink-0 mt-0.5" />
+              <div className="text-[#A8A6B8] leading-relaxed">
+                <strong className="text-[#F5F3ED]">Founder Identity Rule:</strong> To pass KYC verification and ensure trust with institutional investors, your founder profile photo must be an authentic human portrait matching your ID. Cartoon avatars, anime, illustrations, and memes will result in verification decline.
+              </div>
             </div>
 
             {/* Business Registration Cert (for Builder/Founder) */}
