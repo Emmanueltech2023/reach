@@ -19,6 +19,8 @@ import { useSubscription } from "@/hooks/useSubscription";
 import TierBadge from "@/components/TierBadge";
 import VerifiedBadge from "@/components/VerifiedBadge";
 import DocumentWatermarkViewer from "@/components/DocumentWatermarkViewer";
+import ActiveCallOverlay from "@/components/ActiveCallOverlay";
+import { RTC_CONFIG, getLocalMediaStream, stopMediaStream } from "@/lib/webrtc";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -151,11 +153,15 @@ function ChatsInner() {
   // Upgrade
   const [upgradePrompt, setUpgradePrompt] = useState<string | null>(null);
 
-  // Modals
+  // Modals & Native WebRTC Calling
   const [showMeetingModal, setShowMeetingModal] = useState(false);
   const [showDealInfo, setShowDealInfo] = useState(false);
   const [inCall, setInCall] = useState(false);
-  const [callUrl, setCallUrl] = useState<string | null>(null);
+  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
+  const localStreamRef = useRef<MediaStream | null>(null);
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+
   const [callState, setCallState] = useState<{
     status: "idle" | "ringing_outgoing" | "ringing_incoming" | "connected";
     callerId?: string;
@@ -165,7 +171,7 @@ function ChatsInner() {
     recipientName?: string;
     recipientAvatar?: string | null;
     isVideo?: boolean;
-    callUrl?: string;
+    offer?: RTCSessionDescriptionInit;
   }>({ status: "idle" });
   const [meetingForm, setMeetingForm] = useState({
     title: "", agenda: "", date: "", time: "",
@@ -346,6 +352,22 @@ function ChatsInner() {
     return () => { supabase.removeChannel(channel); };
   }, [activeConversationId, currentUser, supabase]);
 
+  // Clean Up Active WebRTC Media & Peer Connection
+  const cleanUpCall = useCallback(() => {
+    if (peerConnectionRef.current) {
+      peerConnectionRef.current.close();
+      peerConnectionRef.current = null;
+    }
+    if (localStreamRef.current) {
+      stopMediaStream(localStreamRef.current);
+      localStreamRef.current = null;
+    }
+    setLocalStream(null);
+    setRemoteStream(null);
+    setCallState({ status: "idle" });
+    setInCall(false);
+  }, []);
+
   // Listen for Real-Time WhatsApp-Style Call Signals for currentUser
   useEffect(() => {
     if (!currentUser?.id) return;
@@ -359,24 +381,38 @@ function ChatsInner() {
           callerName: payload.callerName,
           callerAvatar: payload.callerAvatar,
           isVideo: payload.isVideo,
-          callUrl: payload.callUrl,
+          offer: payload.offer,
         });
       })
       .on("broadcast", { event: "call_ended" }, () => {
-        setCallState({ status: "idle" });
-        setInCall(false);
+        cleanUpCall();
       })
-      .on("broadcast", { event: "call_accepted" }, ({ payload }) => {
-        setCallUrl(payload.callUrl);
-        setInCall(true);
-        setCallState({ status: "connected" });
+      .on("broadcast", { event: "call_accepted" }, async ({ payload }) => {
+        if (peerConnectionRef.current && payload.answer) {
+          try {
+            await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(payload.answer));
+            setCallState((prev) => ({ ...prev, status: "connected" }));
+            setInCall(true);
+          } catch (err) {
+            console.error("Error setting remote description on caller:", err);
+          }
+        }
+      })
+      .on("broadcast", { event: "ice_candidate" }, async ({ payload }) => {
+        if (peerConnectionRef.current && payload.candidate) {
+          try {
+            await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(payload.candidate));
+          } catch (err) {
+            console.warn("Error adding ICE candidate:", err);
+          }
+        }
       })
       .subscribe();
 
     return () => {
       supabase.removeChannel(callChannel);
     };
-  }, [currentUser?.id, supabase]);
+  }, [currentUser?.id, supabase, cleanUpCall]);
 
   // ─── Data fetching ─────────────────────────────────────────────────────────
 
@@ -866,18 +902,51 @@ function ChatsInner() {
     setMeetingForm({ title: "", agenda: "", date: "", time: "", timezone: Intl.DateTimeFormat().resolvedOptions().timeZone });
   };
 
-  // ─── Call ─────────────────────────────────────────────────────────────────
+  // ─── Native WebRTC Call Handlers ──────────────────────────────────────────
 
   const startCall = async (videoEnabled: boolean) => {
     if (!activeConversationId || !currentUser || !activeConvo?.otherUser) return;
     try {
-      const res = await fetch("/api/calls/create-room", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conversationId: activeConversationId }),
+      cleanUpCall();
+
+      const stream = await getLocalMediaStream(videoEnabled);
+      localStreamRef.current = stream;
+      setLocalStream(stream);
+
+      const pc = new RTCPeerConnection(RTC_CONFIG);
+      peerConnectionRef.current = pc;
+
+      // Add local audio/video tracks
+      stream.getTracks().forEach((track) => {
+        pc.addTrack(track, stream);
       });
-      const { url } = await res.json();
-      setCallUrl(url);
+
+      // Handle remote incoming stream
+      pc.ontrack = (event) => {
+        if (event.streams && event.streams[0]) {
+          setRemoteStream(event.streams[0]);
+        }
+      };
+
+      // Handle ICE Candidates
+      pc.onicecandidate = (event) => {
+        if (event.candidate && activeConvo?.otherUser?.id) {
+          const recipientChan = supabase.channel(`call_user_${activeConvo.otherUser.id}`);
+          recipientChan.subscribe((status) => {
+            if (status === "SUBSCRIBED") {
+              recipientChan.send({
+                type: "broadcast",
+                event: "ice_candidate",
+                payload: { candidate: event.candidate },
+              });
+            }
+          });
+        }
+      };
+
+      // Create Offer
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
 
       setCallState({
         status: "ringing_outgoing",
@@ -887,7 +956,7 @@ function ChatsInner() {
         recipientName: activeConvo.otherUser.full_name,
         recipientAvatar: activeConvo.otherUser.avatar_url,
         isVideo: videoEnabled,
-        callUrl: url,
+        offer,
       });
 
       // Broadcast incoming_call signal to recipient
@@ -903,34 +972,77 @@ function ChatsInner() {
               callerAvatar: currentUser.avatar_url,
               conversationId: activeConversationId,
               isVideo: videoEnabled,
-              callUrl: url,
+              offer,
             },
           });
         }
       });
     } catch (e) {
       console.error("Start call error:", e);
-      alert("Call initiation failed.");
+      cleanUpCall();
+      alert("Could not access microphone/camera. Please grant permissions and retry.");
     }
   };
 
-  const acceptCall = () => {
-    if (!callState.callUrl || !callState.callerId) return;
-    setCallUrl(callState.callUrl);
-    setInCall(true);
-    setCallState({ status: "connected" });
+  const acceptCall = async () => {
+    if (!callState.callerId || !callState.offer) return;
+    try {
+      const isVideo = Boolean(callState.isVideo);
+      const stream = await getLocalMediaStream(isVideo);
+      localStreamRef.current = stream;
+      setLocalStream(stream);
 
-    // Signal caller that call was accepted
-    const callerChan = supabase.channel(`call_user_${callState.callerId}`);
-    callerChan.subscribe((status) => {
-      if (status === "SUBSCRIBED") {
-        callerChan.send({
-          type: "broadcast",
-          event: "call_accepted",
-          payload: { callUrl: callState.callUrl },
-        });
-      }
-    });
+      const pc = new RTCPeerConnection(RTC_CONFIG);
+      peerConnectionRef.current = pc;
+
+      stream.getTracks().forEach((track) => {
+        pc.addTrack(track, stream);
+      });
+
+      pc.ontrack = (event) => {
+        if (event.streams && event.streams[0]) {
+          setRemoteStream(event.streams[0]);
+        }
+      };
+
+      pc.onicecandidate = (event) => {
+        if (event.candidate && callState.callerId) {
+          const callerChan = supabase.channel(`call_user_${callState.callerId}`);
+          callerChan.subscribe((status) => {
+            if (status === "SUBSCRIBED") {
+              callerChan.send({
+                type: "broadcast",
+                event: "ice_candidate",
+                payload: { candidate: event.candidate },
+              });
+            }
+          });
+        }
+      };
+
+      await pc.setRemoteDescription(new RTCSessionDescription(callState.offer));
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+
+      setInCall(true);
+      setCallState((prev) => ({ ...prev, status: "connected" }));
+
+      // Signal caller that call was accepted with SDP Answer
+      const callerChan = supabase.channel(`call_user_${callState.callerId}`);
+      callerChan.subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          callerChan.send({
+            type: "broadcast",
+            event: "call_accepted",
+            payload: { answer },
+          });
+        }
+      });
+    } catch (err) {
+      console.error("Accept call error:", err);
+      cleanUpCall();
+      alert("Could not accept call. Please check microphone/camera permissions.");
+    }
   };
 
   const declineCall = () => {
@@ -943,8 +1055,29 @@ function ChatsInner() {
         }
       });
     }
-    setCallState({ status: "idle" });
-    setInCall(false);
+    cleanUpCall();
+  };
+
+  const toggleAudio = () => {
+    if (localStreamRef.current) {
+      const audioTrack = localStreamRef.current.getAudioTracks()[0];
+      if (audioTrack) {
+        audioTrack.enabled = !audioTrack.enabled;
+        return audioTrack.enabled;
+      }
+    }
+    return false;
+  };
+
+  const toggleVideo = () => {
+    if (localStreamRef.current) {
+      const videoTrack = localStreamRef.current.getVideoTracks()[0];
+      if (videoTrack) {
+        videoTrack.enabled = !videoTrack.enabled;
+        return videoTrack.enabled;
+      }
+    }
+    return false;
   };
 
   // ─── Render ───────────────────────────────────────────────────────────────
@@ -1021,29 +1154,26 @@ function ChatsInner() {
         </div>
       )}
 
-      {/* ACTIVE CONNECTED CALL OVERLAY */}
-      {inCall && callUrl && (
-        <div className="fixed inset-0 z-50 bg-black flex flex-col">
-          <div className="flex items-center justify-between px-4 py-3 bg-[#0A0A0F] border-b border-[#1A1A2E]">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-[#F0EEE8] text-sm font-medium">
-                Live call — {activeConvo?.otherUser?.full_name}
-              </span>
-            </div>
-            <button
-              onClick={() => { setInCall(false); setCallUrl(null); }}
-              className="flex items-center gap-2 bg-red-600 text-white text-xs px-3 py-1.5 rounded-lg"
-            >
-              <Phone size={13} /> End call
-            </button>
-          </div>
-          <iframe
-            src={callUrl}
-            allow="camera; microphone; fullscreen; speaker; display-capture"
-            className="flex-1 w-full border-none"
-          />
-        </div>
+      {/* NATIVE WEBRTC CONNECTED CALL OVERLAY */}
+      {inCall && callState.status === "connected" && (
+        <ActiveCallOverlay
+          callerName={
+            callState.callerId === currentUser?.id
+              ? callState.recipientName || activeConvo?.otherUser?.full_name || "REACH Member"
+              : callState.callerName || activeConvo?.otherUser?.full_name || "REACH Member"
+          }
+          callerAvatar={
+            callState.callerId === currentUser?.id
+              ? callState.recipientAvatar || activeConvo?.otherUser?.avatar_url
+              : callState.callerAvatar || activeConvo?.otherUser?.avatar_url
+          }
+          isVideo={Boolean(callState.isVideo)}
+          localStream={localStream}
+          remoteStream={remoteStream}
+          onEndCall={declineCall}
+          onToggleAudio={toggleAudio}
+          onToggleVideo={toggleVideo}
+        />
       )}
 
       {/* TOP BAR */}
