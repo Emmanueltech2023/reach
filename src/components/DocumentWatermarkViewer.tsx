@@ -1,6 +1,4 @@
-"use client";
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X, Lock, ShieldCheck, FileText, Download, Check, Eye } from "lucide-react";
 
 type DocumentViewerProps = {
@@ -10,6 +8,8 @@ type DocumentViewerProps = {
   documentTitle?: string;
   userName: string;
   companyName?: string;
+  projectId?: string;
+  founderId?: string;
 };
 
 export default function DocumentWatermarkViewer({
@@ -19,9 +19,26 @@ export default function DocumentWatermarkViewer({
   documentTitle = "Confidential Pitch Deck",
   userName,
   companyName = "REACH Startup Workspace",
+  projectId,
+  founderId,
 }: DocumentViewerProps) {
   const [ndaAccepted, setNdaAccepted] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (isOpen && projectId) {
+      void fetch("/api/analytics/deck-view", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId,
+          founderId,
+          documentTitle,
+          viewerName: userName,
+        }),
+      }).catch((err) => console.warn("Deck telemetry notice:", err));
+    }
+  }, [isOpen, projectId, founderId, documentTitle, userName]);
 
   if (!isOpen) return null;
 

@@ -14,6 +14,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import TierGate from "@/components/TierGate";
 import { useSubscription, normalizeTier } from "@/hooks/useSubscription";
+import SafeAgreementModal from "@/components/SafeAgreementModal";
 
 type Deal = {
   id: string;
@@ -131,6 +132,8 @@ export default function DealsPage() {
   const [editNotes, setEditNotes] = useState("");
   const [savingAmount, setSavingAmount] = useState(false);
   const [showNewDeal, setShowNewDeal] = useState(false);
+  const [showSafeModal, setShowSafeModal] = useState(false);
+  const [selectedSafeDeal, setSelectedSafeDeal] = useState<Deal | null>(null);
   const [newDealForm, setNewDealForm] = useState({
     projectId: "",
     amount: "",
@@ -542,17 +545,29 @@ export default function DealsPage() {
               </div>
             )}
 
+            {/* SAFE & Term Sheet Generator Action */}
+            <button
+              onClick={() => {
+                setSelectedSafeDeal(selectedDeal);
+                setShowSafeModal(true);
+              }}
+              className="w-full flex items-center justify-center gap-2 bg-[#1A1A2E] hover:bg-[#25253A] border border-[#C9A84C]/50 text-[#C9A84C] font-semibold text-xs py-3 rounded-xl transition cursor-pointer shadow-lg shadow-[#C9A84C]/10"
+            >
+              <FileText size={15} />
+              <span>Generate YC SAFE Note & Term Sheet</span>
+            </button>
+
             <div className="grid grid-cols-2 gap-3">
               <button
                 onClick={() => router.push("/dashboard/chats")}
-                className="flex items-center justify-center gap-2 border border-[#3A3A52] text-[#A8A6B8] text-sm py-2.5 rounded-xl hover:border-[#5C5A70] transition"
+                className="flex items-center justify-center gap-2 border border-[#3A3A52] text-[#A8A6B8] text-sm py-2.5 rounded-xl hover:border-[#5C5A70] transition cursor-pointer"
               >
                 <MessageCircle size={14} />
                 Open chat
               </button>
               <button
                 onClick={() => router.push(`/dashboard/project/${selectedDeal.projects?.id}`)}
-                className="flex items-center justify-center gap-2 border border-[#3A3A52] text-[#A8A6B8] text-sm py-2.5 rounded-xl hover:border-[#5C5A70] transition"
+                className="flex items-center justify-center gap-2 border border-[#3A3A52] text-[#A8A6B8] text-sm py-2.5 rounded-xl hover:border-[#5C5A70] transition cursor-pointer"
               >
                 <TrendingUp size={14} />
                 View project
@@ -923,6 +938,20 @@ export default function DealsPage() {
           </div>
         </div>
       )}
+
+      {/* SAFE AGREEMENT & TERM SHEET MODAL */}
+      <SafeAgreementModal
+        isOpen={showSafeModal}
+        onClose={() => {
+          setShowSafeModal(false);
+          setSelectedSafeDeal(null);
+        }}
+        defaultCompany={selectedSafeDeal?.projects?.name || "REACH Portfolio Startup Inc."}
+        defaultFounder={selectedSafeDeal?.projects?.founder_id ? "Startup Founder" : "Startup Founder"}
+        defaultInvestor={selectedSafeDeal?.profiles?.full_name || "Angel Investor"}
+        defaultAmount={selectedSafeDeal?.amount || 50000}
+        dealId={selectedSafeDeal?.id}
+      />
     </DashboardShell>
   );
 }

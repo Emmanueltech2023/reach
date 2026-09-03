@@ -169,6 +169,11 @@ export default function AdminPage() {
   const [msgSubTab, setMsgSubTab] = useState<"flagged" | "all">("flagged");
   const [inspectingConversation, setInspectingConversation] = useState<any | null>(null);
 
+  // Pre-Launch Waitlist Leads
+  const [waitlistEntries, setWaitlistEntries] = useState<any[]>([]);
+  const [waitlistFilter, setWaitlistFilter] = useState("all");
+  const [updatingWaitlistId, setUpdatingWaitlistId] = useState<string | null>(null);
+
   // Notification & Broadcast Modals
   const [broadcastForm, setBroadcastForm] = useState({ target: "all", userId: "", title: "", body: "", actionUrl: "" });
   const [sendingBroadcast, setSendingBroadcast] = useState(false);
@@ -277,6 +282,7 @@ export default function AdminPage() {
       setJobs(jobList);
       setCommunityPosts(postList);
       setUpgradeRequests(formattedUpgrades);
+      setWaitlistEntries(json.waitlistEntries || []);
 
       setStats({
         totalUsers: allProfiles.length,
@@ -936,6 +942,7 @@ export default function AdminPage() {
     { id: "messages", label: `Flagged Messages`, badge: flaggedMessages.filter((m: any) => m.status === "pending").length, icon: AlertCircle },
     { id: "community", label: `Community (${communityPosts.length})`, icon: MessageSquare },
     { id: "referrals", label: `Referral Network`, icon: Share2 },
+    { id: "waitlist", label: `Waitlist Leads (${waitlistEntries.length})`, badge: waitlistEntries.filter((w) => w.status === "pending").length, icon: UserCheck },
     { id: "broadcast", label: "Broadcast Center", icon: Megaphone },
     { id: "audit", label: "Audit Vault 🕵️", icon: ShieldAlert },
   ];
@@ -2460,6 +2467,39 @@ export default function AdminPage() {
                     }}
                     className="space-y-4"
                   >
+                    {/* Curated Deal Digest Quick Template */}
+                    <div className="p-3.5 rounded-xl bg-[#0F0F1A] border border-[#C9A84C]/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+                      <div>
+                        <span className="text-xs font-bold text-[#C9A84C] flex items-center gap-1.5">
+                          <Sparkles size={13} />
+                          <span>Weekly Curated Investor Deal Digest</span>
+                        </span>
+                        <p className="text-[11px] text-[#8E8CA0] mt-0.5">
+                          Auto-fills an executive teaser of verified startups raising capital for registered investors.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const topProjects = projects.slice(0, 3);
+                          const projectSummaries = topProjects.length > 0
+                            ? topProjects.map((p: any, idx: number) => `${idx + 1}. ${p.name} (${p.category || "Tech"}) — Target Raise: $${(p.funding_goal || 100000).toLocaleString()} USD`).join("\n")
+                            : "1. Verified Emerging Market Fintech — Raising $250k Seed\n2. AI Infrastructure Platform — Raising $500k\n3. Cross-Border Logistics SaaS — Raising $150k";
+
+                          setBroadcastForm({
+                            target: "investors",
+                            userId: "",
+                            title: "Curated Deal Digest: Top Vetted Startups Raising on REACH 🚀",
+                            body: `Exclusive deal flow digest for accredited investors:\n\n${projectSummaries}\n\nReview data rooms, watermarked decks, and schedule direct calls with founders now.`,
+                            actionUrl: "/dashboard/investor",
+                          });
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-[#C9A84C]/15 border border-[#C9A84C]/40 text-[#C9A84C] font-bold text-xs hover:bg-[#C9A84C]/25 transition shrink-0 cursor-pointer"
+                      >
+                        Load Deal Digest Template
+                      </button>
+                    </div>
+
                     <div>
                       <label className="text-xs font-semibold text-[#A8A6B8] mb-1.5 block">Target Audience</label>
                       <select
@@ -2531,6 +2571,240 @@ export default function AdminPage() {
                       {sendingBroadcast ? <Loader2 size={16} className="animate-spin" /> : <><Send size={16} /> Dispatch Broadcast</>}
                     </button>
                   </form>
+                </div>
+              </div>
+            )}
+
+            {/* PRE-LAUNCH WAITLIST LEADS TAB */}
+            {activeTab === "waitlist" && (
+              <div className="space-y-6">
+                {/* Header & Stats Banner */}
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-[#1A1A2E] border border-[#3A3A52] rounded-2xl p-5 shadow-xl">
+                  <div>
+                    <h2 className="text-lg font-bold text-[#F5F3ED] flex items-center gap-2">
+                      <UserCheck size={20} className="text-[#C9A84C]" />
+                      <span>Pre-Launch Waitlist & Lead Pipeline</span>
+                      <span className="text-xs px-2.5 py-0.5 rounded-full bg-[#C9A84C]/15 border border-[#C9A84C]/30 text-[#C9A84C] font-bold">
+                        {waitlistEntries.length} Total Applicants
+                      </span>
+                    </h2>
+                    <p className="text-xs text-[#A8A6B8] mt-0.5">
+                      Review, manage, and approve early-access applicants across Investors, Founders, and Talent.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const csvContent = "data:text/csv;charset=utf-8," + [
+                          ["Name", "Email", "Role", "Country", "Ticket Size", "Startup", "Target Raise", "Referral Code", "Status", "Date"].join(","),
+                          ...waitlistEntries.map(w => [
+                            `"${w.full_name || ""}"`,
+                            `"${w.email || ""}"`,
+                            `"${w.role || ""}"`,
+                            `"${w.country || ""}"`,
+                            `"${w.ticket_size || ""}"`,
+                            `"${w.startup_name || ""}"`,
+                            `"${w.target_raise || ""}"`,
+                            `"${w.referral_code || ""}"`,
+                            `"${w.status || "pending"}"`,
+                            `"${w.created_at || ""}"`,
+                          ].join(","))
+                        ].join("\n");
+                        const encodedUri = encodeURI(csvContent);
+                        const link = document.createElement("a");
+                        link.setAttribute("href", encodedUri);
+                        link.setAttribute("download", `reach_waitlist_leads_${new Date().toISOString().slice(0, 10)}.csv`);
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                      }}
+                      className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#0F0F1A] border border-[#3A3A52] text-xs font-semibold text-[#A8A6B8] hover:text-white hover:border-[#C9A84C] transition cursor-pointer"
+                    >
+                      <Download size={14} />
+                      <span>Export CSV</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Metric Summary Cards */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  {[
+                    { label: "Total Leads", count: waitlistEntries.length, color: "text-[#C9A84C]", bg: "bg-[#C9A84C]/10" },
+                    { label: "Investors in Queue", count: waitlistEntries.filter(w => w.role === "investor").length, color: "text-emerald-400", bg: "bg-emerald-500/10" },
+                    { label: "Founders in Queue", count: waitlistEntries.filter(w => w.role === "builder").length, color: "text-blue-400", bg: "bg-blue-500/10" },
+                    { label: "Talent in Queue", count: waitlistEntries.filter(w => w.role === "talent").length, color: "text-purple-400", bg: "bg-purple-500/10" },
+                  ].map((stat, i) => (
+                    <div key={i} className="p-4 rounded-2xl bg-[#1A1A2E] border border-[#3A3A52] space-y-1">
+                      <span className="text-[11px] text-[#8E8CA0] uppercase tracking-wider font-semibold block">{stat.label}</span>
+                      <span className={`text-2xl font-black ${stat.color}`}>{stat.count}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Filter & Search Bar */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-[#1A1A2E] border border-[#3A3A52] rounded-2xl p-4">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {["all", "investor", "builder", "talent"].map((f) => (
+                      <button
+                        key={f}
+                        type="button"
+                        onClick={() => setWaitlistFilter(f)}
+                        className={`text-xs font-bold px-3 py-1.5 rounded-xl border transition cursor-pointer capitalize ${
+                          waitlistFilter === f
+                            ? "bg-[#C9A84C] text-[#0A0A0F] border-[#C9A84C]"
+                            : "bg-[#0F0F1A] border-[#3A3A52] text-[#8E8CA0] hover:text-[#F5F3ED]"
+                        }`}
+                      >
+                        {f === "all" ? "All Applicants" : f === "builder" ? "Founders" : `${f}s`}
+                      </button>
+                    ))}
+                  </div>
+
+                  <span className="text-xs text-[#8E8CA0] font-mono">
+                    Showing {waitlistEntries.filter(w => waitlistFilter === "all" || w.role === waitlistFilter).length} leads
+                  </span>
+                </div>
+
+                {/* Leads Table */}
+                <div className="bg-[#1A1A2E] border border-[#3A3A52] rounded-2xl overflow-hidden shadow-xl">
+                  {waitlistEntries.length === 0 ? (
+                    <div className="p-12 text-center space-y-2">
+                      <UserCheck size={32} className="text-[#C9A84C] mx-auto opacity-50" />
+                      <h3 className="text-sm font-bold text-[#F5F3ED]">No waitlist applications yet</h3>
+                      <p className="text-xs text-[#8E8CA0]">
+                        Applications submitted via /waitlist will appear here in real-time.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs">
+                        <thead>
+                          <tr className="border-b border-[#3A3A52] bg-[#0F0F1A] text-[#8E8CA0] uppercase text-[10px] tracking-wider">
+                            <th className="py-3.5 px-4 font-bold">Applicant</th>
+                            <th className="py-3.5 px-4 font-bold">Role</th>
+                            <th className="py-3.5 px-4 font-bold">Location</th>
+                            <th className="py-3.5 px-4 font-bold">Profile Details</th>
+                            <th className="py-3.5 px-4 font-bold">Referral</th>
+                            <th className="py-3.5 px-4 font-bold">Status</th>
+                            <th className="py-3.5 px-4 font-bold text-right">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[#3A3A52]/60">
+                          {waitlistEntries
+                            .filter(w => waitlistFilter === "all" || w.role === waitlistFilter)
+                            .map((entry: any) => (
+                              <tr key={entry.id} className="hover:bg-[#25253A]/50 transition">
+                                <td className="py-3.5 px-4">
+                                  <div className="font-bold text-[#F5F3ED]">{entry.full_name}</div>
+                                  <div className="text-[11px] text-[#8E8CA0] font-mono">{entry.email}</div>
+                                </td>
+                                <td className="py-3.5 px-4">
+                                  <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold uppercase ${
+                                    entry.role === "investor"
+                                      ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-400"
+                                      : entry.role === "builder"
+                                      ? "bg-blue-500/10 border border-blue-500/30 text-blue-400"
+                                      : "bg-purple-500/10 border border-purple-500/30 text-purple-400"
+                                  }`}>
+                                    {entry.role === "builder" ? "Founder" : entry.role}
+                                  </span>
+                                </td>
+                                <td className="py-3.5 px-4 text-[#A8A6B8]">
+                                  {entry.country || "Global"}
+                                </td>
+                                <td className="py-3.5 px-4">
+                                  {entry.role === "investor" && (
+                                    <div className="space-y-0.5">
+                                      <span className="font-semibold text-[#F5F3ED] block">Ticket: {entry.ticket_size || "Standard"}</span>
+                                      {Array.isArray(entry.sectors) && entry.sectors.length > 0 && (
+                                        <span className="text-[10px] text-[#C9A84C] block">{entry.sectors.join(", ")}</span>
+                                      )}
+                                    </div>
+                                  )}
+                                  {entry.role === "builder" && (
+                                    <div className="space-y-0.5">
+                                      <span className="font-semibold text-[#F5F3ED] block">{entry.startup_name || "Startup"}</span>
+                                      <span className="text-[10px] text-[#8E8CA0] block">Target: {entry.target_raise || "Flexible"} · {entry.stage || "Early"}</span>
+                                    </div>
+                                  )}
+                                  {entry.role === "talent" && (
+                                    <div className="text-[#A8A6B8]">{entry.skills || "Tech Specialist"}</div>
+                                  )}
+                                </td>
+                                <td className="py-3.5 px-4">
+                                  <div className="font-mono text-[11px] text-[#C9A84C]">{entry.referral_code || "—"}</div>
+                                  {entry.referred_by && (
+                                    <div className="text-[10px] text-[#8E8CA0]">via: {entry.referred_by}</div>
+                                  )}
+                                </td>
+                                <td className="py-3.5 px-4">
+                                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold capitalize ${
+                                    entry.status === "approved" || entry.status === "invited"
+                                      ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+                                      : "bg-yellow-500/15 text-yellow-400 border border-yellow-500/30"
+                                  }`}>
+                                    {entry.status || "pending"}
+                                  </span>
+                                </td>
+                                <td className="py-3.5 px-4 text-right">
+                                  <div className="flex items-center justify-end gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const origin = window.location.origin;
+                                        const inviteUrl = `${origin}/onboarding?email=${encodeURIComponent(entry.email)}&role=${encodeURIComponent(entry.role || "investor")}`;
+                                        navigator.clipboard.writeText(inviteUrl);
+                                        showNotification(`Copied VIP Invite Link for ${entry.full_name}! 📋`);
+                                      }}
+                                      className="px-2 py-1.5 rounded-lg bg-[#141424] border border-[#3A3A52] hover:border-[#C9A84C] text-[11px] font-semibold text-[#A8A6B8] hover:text-white transition cursor-pointer flex items-center gap-1"
+                                      title="Copy personalized direct signup link"
+                                    >
+                                      <Share2 size={12} />
+                                      <span>Copy Link</span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      disabled={updatingWaitlistId === entry.id}
+                                      onClick={async () => {
+                                        const newStatus = entry.status === "invited" ? "pending" : "invited";
+                                        setUpdatingWaitlistId(entry.id);
+                                        try {
+                                          const res = await fetch("/api/admin/waitlist", {
+                                            method: "POST",
+                                            headers: { "Content-Type": "application/json" },
+                                            body: JSON.stringify({ entryId: entry.id, status: newStatus }),
+                                          });
+                                          if (res.ok) {
+                                            setWaitlistEntries(prev => prev.map(item => item.id === entry.id ? { ...item, status: newStatus } : item));
+                                            showNotification(`Lead marked as ${newStatus}!`);
+                                          }
+                                        } catch {
+                                          showNotification("Status update failed");
+                                        } finally {
+                                          setUpdatingWaitlistId(null);
+                                        }
+                                      }}
+                                      className="px-2.5 py-1.5 rounded-lg bg-[#0F0F1A] border border-[#3A3A52] hover:border-[#C9A84C] text-[11px] font-semibold text-[#F5F3ED] transition cursor-pointer"
+                                    >
+                                      {updatingWaitlistId === entry.id ? (
+                                        <Loader2 size={12} className="animate-spin inline" />
+                                      ) : entry.status === "invited" ? (
+                                        "Reset to Pending"
+                                      ) : (
+                                        "Approve & Invite"
+                                      )}
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

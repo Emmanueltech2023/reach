@@ -249,6 +249,12 @@ export default function LandingPage() {
 
           <div className="flex items-center gap-3">
             <button
+              onClick={() => router.push("/waitlist")}
+              className="text-xs sm:text-sm text-[#C9A84C] font-semibold border border-[#C9A84C]/40 bg-[#C9A84C]/10 px-3 py-1.5 rounded-lg hover:bg-[#C9A84C]/20 transition cursor-pointer"
+            >
+              Join Waitlist
+            </button>
+            <button
               onClick={() => router.push("/auth/login")}
               className="hidden sm:block text-sm text-[#A8A6B8] hover:text-[#F5F3ED] transition px-3 py-1.5 cursor-pointer"
             >
@@ -301,6 +307,15 @@ export default function LandingPage() {
 
         <div className="relative z-10 flex flex-col items-center max-w-3xl">
 
+          {/* Waitlist Badge in Hero */}
+          <button
+            onClick={() => router.push("/waitlist")}
+            className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#C9A84C]/15 border border-[#C9A84C]/35 text-[#C9A84C] text-xs font-bold mb-4 hover:bg-[#C9A84C]/25 transition cursor-pointer backdrop-blur-md"
+          >
+            <Sparkles size={13} />
+            <span>Apply for REACH Private Beta · Priority Access Open →</span>
+          </button>
+
           <h1 className="text-3xl sm:text-5xl md:text-6xl font-display font-bold tracking-tight mb-4 sm:mb-6 leading-tight">
             Empowering Entrepreneurs.{" "}
             <span className="text-[#C9A84C] block sm:inline">Expanding Horizons.</span>
@@ -312,18 +327,17 @@ export default function LandingPage() {
 
           <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
             <button
-              onClick={() => router.push("/onboarding")}
-              className="flex items-center justify-center gap-2 bg-[#C9A84C] text-[#1A1A2E] font-medium text-sm px-8 py-3.5 rounded-xl hover:opacity-90 transition cursor-pointer"
-              style={{ boxShadow: "0 8px 32px rgba(201, 168, 76, 0.3)" }}
+              onClick={() => router.push("/waitlist")}
+              className="flex items-center justify-center gap-2 bg-[#C9A84C] text-[#1A1A2E] font-bold text-sm px-8 py-3.5 rounded-xl hover:opacity-90 transition cursor-pointer shadow-xl shadow-[#C9A84C]/25"
             >
-              Start investing
+              Join Private Beta Waitlist
               <ArrowRight size={16} />
             </button>
             <button
-              onClick={() => router.push("/auth/login")}
+              onClick={() => router.push("/onboarding")}
               className="flex items-center justify-center gap-2 border border-[#F5F3ED40] text-[#F5F3ED] font-medium text-sm px-8 py-3.5 rounded-xl hover:bg-[#F5F3ED10] backdrop-blur transition cursor-pointer"
             >
-              Log in to dashboard
+              Start Exploring
             </button>
           </div>
 

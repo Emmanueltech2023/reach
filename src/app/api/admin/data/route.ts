@@ -26,12 +26,14 @@ export async function GET(req: NextRequest) {
       { data: projects, error: projError },
       { data: jobs, error: jobError },
       { data: communityPosts, error: postError },
+      { data: waitlist, error: waitlistError },
     ] = await Promise.all([
       supabase.from("profiles").select("*").order("created_at", { ascending: false }),
       supabase.from("upgrade_requests").select("*").order("created_at", { ascending: false }),
       supabase.from("projects").select("*, profiles:founder_id(id, full_name, username, is_verified)").order("created_at", { ascending: false }),
       supabase.from("jobs").select("*, profiles:posted_by(id, full_name, username)").order("created_at", { ascending: false }),
       supabase.from("community_posts").select("*, profiles:author_id(id, full_name, username, is_verified)").order("created_at", { ascending: false }),
+      supabase.from("waitlist_entries").select("*").order("created_at", { ascending: false }),
     ]);
 
     if (profError) console.error("Admin API profError:", profError);
@@ -39,6 +41,7 @@ export async function GET(req: NextRequest) {
     if (projError) console.error("Admin API projError:", projError);
     if (jobError) console.error("Admin API jobError:", jobError);
     if (postError) console.error("Admin API postError:", postError);
+    if (waitlistError) console.warn("Admin API waitlistError (table may need creation):", waitlistError);
 
     return NextResponse.json({
       profiles: profiles || [],
@@ -46,6 +49,7 @@ export async function GET(req: NextRequest) {
       projects: projects || [],
       jobs: jobs || [],
       communityPosts: communityPosts || [],
+      waitlistEntries: waitlist || [],
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Failed to load admin data";

@@ -56,6 +56,7 @@ export const metadata: Metadata = {
 
 import PwaInstallPrompt from "@/components/PwaInstallPrompt";
 import CookieConsentBanner from "@/components/CookieConsentBanner";
+import { CallProvider } from "@/context/CallContext";
 
 export default function RootLayout({
   children,
@@ -67,9 +68,11 @@ export default function RootLayout({
       <body className={inter.className}>
         <CurrencyProvider>
           <Web3Provider>
-            {children}
-            <PwaInstallPrompt />
-            <CookieConsentBanner />
+            <CallProvider>
+              {children}
+              <PwaInstallPrompt />
+              <CookieConsentBanner />
+            </CallProvider>
           </Web3Provider>
         </CurrencyProvider>
       </body>

@@ -19,8 +19,7 @@ import { useSubscription } from "@/hooks/useSubscription";
 import TierBadge from "@/components/TierBadge";
 import VerifiedBadge from "@/components/VerifiedBadge";
 import DocumentWatermarkViewer from "@/components/DocumentWatermarkViewer";
-import ActiveCallOverlay from "@/components/ActiveCallOverlay";
-import { RTC_CONFIG, getLocalMediaStream, stopMediaStream } from "@/lib/webrtc";
+import { useCall } from "@/context/CallContext";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -153,26 +152,10 @@ function ChatsInner() {
   // Upgrade
   const [upgradePrompt, setUpgradePrompt] = useState<string | null>(null);
 
-  // Modals & Native WebRTC Calling
+  // Calling & Modals
+  const { startCall } = useCall();
   const [showMeetingModal, setShowMeetingModal] = useState(false);
   const [showDealInfo, setShowDealInfo] = useState(false);
-  const [inCall, setInCall] = useState(false);
-  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
-  const localStreamRef = useRef<MediaStream | null>(null);
-  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
-  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
-
-  const [callState, setCallState] = useState<{
-    status: "idle" | "ringing_outgoing" | "ringing_incoming" | "connected";
-    callerId?: string;
-    callerName?: string;
-    callerAvatar?: string | null;
-    recipientId?: string;
-    recipientName?: string;
-    recipientAvatar?: string | null;
-    isVideo?: boolean;
-    offer?: RTCSessionDescriptionInit;
-  }>({ status: "idle" });
   const [meetingForm, setMeetingForm] = useState({
     title: "", agenda: "", date: "", time: "",
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -351,68 +334,6 @@ function ChatsInner() {
 
     return () => { supabase.removeChannel(channel); };
   }, [activeConversationId, currentUser, supabase]);
-
-  // Clean Up Active WebRTC Media & Peer Connection
-  const cleanUpCall = useCallback(() => {
-    if (peerConnectionRef.current) {
-      peerConnectionRef.current.close();
-      peerConnectionRef.current = null;
-    }
-    if (localStreamRef.current) {
-      stopMediaStream(localStreamRef.current);
-      localStreamRef.current = null;
-    }
-    setLocalStream(null);
-    setRemoteStream(null);
-    setCallState({ status: "idle" });
-    setInCall(false);
-  }, []);
-
-  // Listen for Real-Time WhatsApp-Style Call Signals for currentUser
-  useEffect(() => {
-    if (!currentUser?.id) return;
-
-    const callChannel = supabase
-      .channel(`call_user_${currentUser.id}`)
-      .on("broadcast", { event: "incoming_call" }, ({ payload }) => {
-        setCallState({
-          status: "ringing_incoming",
-          callerId: payload.callerId,
-          callerName: payload.callerName,
-          callerAvatar: payload.callerAvatar,
-          isVideo: payload.isVideo,
-          offer: payload.offer,
-        });
-      })
-      .on("broadcast", { event: "call_ended" }, () => {
-        cleanUpCall();
-      })
-      .on("broadcast", { event: "call_accepted" }, async ({ payload }) => {
-        if (peerConnectionRef.current && payload.answer) {
-          try {
-            await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(payload.answer));
-            setCallState((prev) => ({ ...prev, status: "connected" }));
-            setInCall(true);
-          } catch (err) {
-            console.error("Error setting remote description on caller:", err);
-          }
-        }
-      })
-      .on("broadcast", { event: "ice_candidate" }, async ({ payload }) => {
-        if (peerConnectionRef.current && payload.candidate) {
-          try {
-            await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(payload.candidate));
-          } catch (err) {
-            console.warn("Error adding ICE candidate:", err);
-          }
-        }
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(callChannel);
-    };
-  }, [currentUser?.id, supabase, cleanUpCall]);
 
   // ─── Data fetching ─────────────────────────────────────────────────────────
 
@@ -902,279 +823,22 @@ function ChatsInner() {
     setMeetingForm({ title: "", agenda: "", date: "", time: "", timezone: Intl.DateTimeFormat().resolvedOptions().timeZone });
   };
 
-  // ─── Native WebRTC Call Handlers ──────────────────────────────────────────
+  // ─── Call Handlers (Delegates to Global CallProvider) ──────────────────────
 
-  const startCall = async (videoEnabled: boolean) => {
+  const handleStartCall = (videoEnabled: boolean) => {
     if (!activeConversationId || !currentUser || !activeConvo?.otherUser) return;
-    try {
-      cleanUpCall();
-
-      const stream = await getLocalMediaStream(videoEnabled);
-      localStreamRef.current = stream;
-      setLocalStream(stream);
-
-      const pc = new RTCPeerConnection(RTC_CONFIG);
-      peerConnectionRef.current = pc;
-
-      // Add local audio/video tracks
-      stream.getTracks().forEach((track) => {
-        pc.addTrack(track, stream);
-      });
-
-      // Handle remote incoming stream
-      pc.ontrack = (event) => {
-        if (event.streams && event.streams[0]) {
-          setRemoteStream(event.streams[0]);
-        }
-      };
-
-      // Handle ICE Candidates
-      pc.onicecandidate = (event) => {
-        if (event.candidate && activeConvo?.otherUser?.id) {
-          const recipientChan = supabase.channel(`call_user_${activeConvo.otherUser.id}`);
-          recipientChan.subscribe((status) => {
-            if (status === "SUBSCRIBED") {
-              recipientChan.send({
-                type: "broadcast",
-                event: "ice_candidate",
-                payload: { candidate: event.candidate },
-              });
-            }
-          });
-        }
-      };
-
-      // Create Offer
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-
-      setCallState({
-        status: "ringing_outgoing",
-        callerId: currentUser.id,
-        callerName: currentUser.full_name,
-        recipientId: activeConvo.otherUser.id,
-        recipientName: activeConvo.otherUser.full_name,
-        recipientAvatar: activeConvo.otherUser.avatar_url,
-        isVideo: videoEnabled,
-        offer,
-      });
-
-      // Broadcast incoming_call signal to recipient
-      const recipientChan = supabase.channel(`call_user_${activeConvo.otherUser.id}`);
-      recipientChan.subscribe((status) => {
-        if (status === "SUBSCRIBED") {
-          recipientChan.send({
-            type: "broadcast",
-            event: "incoming_call",
-            payload: {
-              callerId: currentUser.id,
-              callerName: currentUser.full_name,
-              callerAvatar: currentUser.avatar_url,
-              conversationId: activeConversationId,
-              isVideo: videoEnabled,
-              offer,
-            },
-          });
-        }
-      });
-    } catch (e) {
-      console.error("Start call error:", e);
-      cleanUpCall();
-      alert("Could not access microphone/camera. Please grant permissions and retry.");
-    }
-  };
-
-  const acceptCall = async () => {
-    if (!callState.callerId || !callState.offer) return;
-    try {
-      const isVideo = Boolean(callState.isVideo);
-      const stream = await getLocalMediaStream(isVideo);
-      localStreamRef.current = stream;
-      setLocalStream(stream);
-
-      const pc = new RTCPeerConnection(RTC_CONFIG);
-      peerConnectionRef.current = pc;
-
-      stream.getTracks().forEach((track) => {
-        pc.addTrack(track, stream);
-      });
-
-      pc.ontrack = (event) => {
-        if (event.streams && event.streams[0]) {
-          setRemoteStream(event.streams[0]);
-        }
-      };
-
-      pc.onicecandidate = (event) => {
-        if (event.candidate && callState.callerId) {
-          const callerChan = supabase.channel(`call_user_${callState.callerId}`);
-          callerChan.subscribe((status) => {
-            if (status === "SUBSCRIBED") {
-              callerChan.send({
-                type: "broadcast",
-                event: "ice_candidate",
-                payload: { candidate: event.candidate },
-              });
-            }
-          });
-        }
-      };
-
-      await pc.setRemoteDescription(new RTCSessionDescription(callState.offer));
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-
-      setInCall(true);
-      setCallState((prev) => ({ ...prev, status: "connected" }));
-
-      // Signal caller that call was accepted with SDP Answer
-      const callerChan = supabase.channel(`call_user_${callState.callerId}`);
-      callerChan.subscribe((status) => {
-        if (status === "SUBSCRIBED") {
-          callerChan.send({
-            type: "broadcast",
-            event: "call_accepted",
-            payload: { answer },
-          });
-        }
-      });
-    } catch (err) {
-      console.error("Accept call error:", err);
-      cleanUpCall();
-      alert("Could not accept call. Please check microphone/camera permissions.");
-    }
-  };
-
-  const declineCall = () => {
-    const targetId = callState.callerId || callState.recipientId;
-    if (targetId) {
-      const chan = supabase.channel(`call_user_${targetId}`);
-      chan.subscribe((status) => {
-        if (status === "SUBSCRIBED") {
-          chan.send({ type: "broadcast", event: "call_ended", payload: {} });
-        }
-      });
-    }
-    cleanUpCall();
-  };
-
-  const toggleAudio = () => {
-    if (localStreamRef.current) {
-      const audioTrack = localStreamRef.current.getAudioTracks()[0];
-      if (audioTrack) {
-        audioTrack.enabled = !audioTrack.enabled;
-        return audioTrack.enabled;
-      }
-    }
-    return false;
-  };
-
-  const toggleVideo = () => {
-    if (localStreamRef.current) {
-      const videoTrack = localStreamRef.current.getVideoTracks()[0];
-      if (videoTrack) {
-        videoTrack.enabled = !videoTrack.enabled;
-        return videoTrack.enabled;
-      }
-    }
-    return false;
+    void startCall({
+      recipientId: activeConvo.otherUser.id,
+      recipientName: activeConvo.otherUser.full_name,
+      recipientAvatar: activeConvo.otherUser.avatar_url,
+      isVideo: videoEnabled,
+    });
   };
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
     <div className="h-screen bg-[#0A0A0F] flex flex-col overflow-hidden">
-
-      {/* OUTGOING RINGING CALL OVERLAY */}
-      {callState.status === "ringing_outgoing" && (
-        <div className="fixed inset-0 z-50 bg-[#0A0A0F]/95 backdrop-blur-xl flex flex-col items-center justify-center p-6 animate-in fade-in duration-300">
-          <div className="relative mb-6">
-            <div className="w-28 h-28 rounded-full bg-[#C9A84C]/10 border-2 border-[#C9A84C]/40 animate-ping absolute inset-0" />
-            <div className="w-28 h-28 rounded-full bg-[#1A1A2E] border-2 border-[#C9A84C] flex items-center justify-center text-3xl font-bold text-[#C9A84C] relative overflow-hidden shadow-2xl shadow-[#C9A84C]/20">
-              {callState.recipientAvatar ? (
-                <img src={callState.recipientAvatar} alt="" className="w-full h-full object-cover" />
-              ) : (
-                getInitials(callState.recipientName || "?")
-              )}
-            </div>
-          </div>
-          <h2 className="text-xl font-bold text-[#F5F3ED] mb-1">
-            Calling {callState.recipientName}…
-          </h2>
-          <p className="text-xs text-[#A8A6B8] mb-8 flex items-center gap-1.5 font-medium">
-            {callState.isVideo ? <Video size={14} className="text-[#C9A84C]" /> : <Phone size={14} className="text-[#C9A84C]" />}
-            Outgoing {callState.isVideo ? "Video" : "Voice"} Call · Ringing
-          </p>
-          <button
-            onClick={declineCall}
-            className="w-16 h-16 rounded-full bg-red-600 hover:bg-red-700 text-white flex items-center justify-center shadow-xl shadow-red-900/40 active:scale-95 transition cursor-pointer"
-            title="Cancel Call"
-          >
-            <Phone size={24} className="rotate-[135deg]" />
-          </button>
-        </div>
-      )}
-
-      {/* INCOMING RINGING CALL OVERLAY */}
-      {callState.status === "ringing_incoming" && (
-        <div className="fixed inset-0 z-50 bg-[#0A0A0F]/95 backdrop-blur-xl flex flex-col items-center justify-center p-6 animate-in zoom-in-95 duration-300">
-          <div className="relative mb-6">
-            <div className="w-28 h-28 rounded-full bg-emerald-500/20 border-2 border-emerald-500/50 animate-ping absolute inset-0" />
-            <div className="w-28 h-28 rounded-full bg-[#1A1A2E] border-2 border-emerald-500 flex items-center justify-center text-3xl font-bold text-emerald-400 relative overflow-hidden shadow-2xl shadow-emerald-500/20">
-              {callState.callerAvatar ? (
-                <img src={callState.callerAvatar} alt="" className="w-full h-full object-cover" />
-              ) : (
-                getInitials(callState.callerName || "?")
-              )}
-            </div>
-          </div>
-          <h2 className="text-xl font-bold text-[#F5F3ED] mb-1">
-            {callState.callerName} is calling…
-          </h2>
-          <p className="text-xs text-[#A8A6B8] mb-8 flex items-center gap-1.5 font-medium">
-            {callState.isVideo ? <Video size={14} className="text-emerald-400" /> : <Phone size={14} className="text-emerald-400" />}
-            Incoming {callState.isVideo ? "Video" : "Voice"} Call
-          </p>
-          <div className="flex items-center gap-8">
-            <button
-              onClick={declineCall}
-              className="w-16 h-16 rounded-full bg-red-600 hover:bg-red-700 text-white flex items-center justify-center shadow-xl shadow-red-900/40 active:scale-95 transition cursor-pointer"
-              title="Decline Call"
-            >
-              <Phone size={24} className="rotate-[135deg]" />
-            </button>
-            <button
-              onClick={acceptCall}
-              className="w-16 h-16 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white flex items-center justify-center shadow-xl shadow-emerald-900/40 active:scale-95 transition cursor-pointer animate-bounce"
-              title="Answer Call"
-            >
-              <Phone size={24} />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* NATIVE WEBRTC CONNECTED CALL OVERLAY */}
-      {inCall && callState.status === "connected" && (
-        <ActiveCallOverlay
-          callerName={
-            callState.callerId === currentUser?.id
-              ? callState.recipientName || activeConvo?.otherUser?.full_name || "REACH Member"
-              : callState.callerName || activeConvo?.otherUser?.full_name || "REACH Member"
-          }
-          callerAvatar={
-            callState.callerId === currentUser?.id
-              ? callState.recipientAvatar || activeConvo?.otherUser?.avatar_url
-              : callState.callerAvatar || activeConvo?.otherUser?.avatar_url
-          }
-          isVideo={Boolean(callState.isVideo)}
-          localStream={localStream}
-          remoteStream={remoteStream}
-          onEndCall={declineCall}
-          onToggleAudio={toggleAudio}
-          onToggleVideo={toggleVideo}
-        />
-      )}
 
       {/* TOP BAR */}
       <header className={`${mobileView === "chat" ? "hidden md:flex" : "flex"} bg-[#0A0A0F] border-b border-[#1A1A2E] px-4 py-3 items-center gap-3 shrink-0 z-20`}>
@@ -1502,14 +1166,14 @@ function ChatsInner() {
                   {!isConciergeConvo && (
                     <div className="flex items-center gap-1 shrink-0">
                       <button
-                        onClick={() => startCall(false)}
+                        onClick={() => handleStartCall(false)}
                         className="w-8 h-8 flex items-center justify-center border border-[#2A2A3E] bg-[#141424] hover:bg-[#1A1A2E] text-[#A8A6B8] hover:text-[#C9A84C] rounded-lg transition"
                         title={isTalentConvo ? "Voice interview call" : "Voice call"}
                       >
                         <Phone size={14} />
                       </button>
                       <button
-                        onClick={() => startCall(true)}
+                        onClick={() => handleStartCall(true)}
                         className="w-8 h-8 flex items-center justify-center border border-[#2A2A3E] bg-[#141424] hover:bg-[#1A1A2E] text-[#A8A6B8] hover:text-[#C9A84C] rounded-lg transition"
                         title={isTalentConvo ? "Video interview call" : "Video call"}
                       >

@@ -621,6 +621,8 @@ export default function ProjectDetailPage() {
         documentTitle={`${project?.name || "Startup"} Confidential Pitch Deck`}
         userName={currentUserProfile?.full_name || "Accredited Investor"}
         companyName={project?.name || "REACH Deal Room"}
+        projectId={project?.id}
+        founderId={project?.profiles?.id}
       />
     </div>
   );
